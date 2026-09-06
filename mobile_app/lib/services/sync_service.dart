@@ -6,6 +6,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SyncService {
   static bool _isSyncing = false;
+  static bool _isUploadingOutbox = false;
+
+  /// Fast-path sync to upload pending records (e.g. immediately after attendance punch)
+  /// without incurring expensive remote data downloads.
+  static Future<void> uploadPendingOutbox(String storeId) async {
+    if (_isUploadingOutbox) return;
+
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      return;
+    }
+
+    _isUploadingOutbox = true;
+    try {
+      await _processOutbox(storeId);
+    } catch (e) {
+      debugPrint("[SyncService] Upload outbox failed: $e");
+    } finally {
+      _isUploadingOutbox = false;
+    }
+  }
 
   static Future<void> syncAllData(String storeId) async {
     if (_isSyncing) return;
@@ -42,15 +63,14 @@ class SyncService {
           .from('employees')
           .select()
           .eq('store_id', storeId);
-          
-      // TODO: Merge remote employees into local SQLite DB
-      // (Implementation deferred for brevity; will require DatabaseHelper methods)
+      debugPrint("[SyncService] Fetched ${remoteEmployees.length} remote employees.");
 
       // Biometrics
       final remoteBiometrics = await Supabase.instance.client
           .from('biometric_profiles')
           .select()
           .eq('store_id', storeId);
+      debugPrint("[SyncService] Fetched ${remoteBiometrics.length} remote biometrics.");
           
       // TODO: Merge biometrics into local DB
       

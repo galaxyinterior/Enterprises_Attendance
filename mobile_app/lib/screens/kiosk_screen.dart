@@ -1,22 +1,24 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:intl/intl.dart';
-import '../models/attendance_log.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import '../services/ml_service.dart';
-import '../models/employee.dart';
-import '../services/database_helper.dart';
-import '../repositories/attendance_repository.dart';
-import '../services/tts_service.dart';
-
-import '../services/sync_service.dart';
-import '../models/store_config.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
+
+import '../models/attendance_log.dart';
+import '../models/employee.dart';
+import '../models/store_config.dart';
+import '../services/ml_service.dart';
+import '../services/database_helper.dart';
+import '../services/camera_stream_helper.dart';
+import '../repositories/attendance_repository.dart';
+import '../services/tts_service.dart';
+import '../services/sync_service.dart';
 
 class KioskScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -27,61 +29,96 @@ class KioskScreen extends StatefulWidget {
   State<KioskScreen> createState() => _KioskScreenState();
 }
 
-class _KioskScreenState extends State<KioskScreen> {
+class _KioskScreenState extends State<KioskScreen> with WidgetsBindingObserver {
   final AttendanceRepository _attendanceRepo = AttendanceRepository();
+  final MLService _mlService = MLService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // Reusable FaceDetector - initialized once, closed on dispose
+  late final FaceDetector _faceDetector;
+
   CameraController? _cameraController;
+  CameraDescription? _selectedCamera;
+  bool _isCameraInitializing = false;
+  bool _isStreaming = false;
+
+  // Frame gating & throttling (Target: ~2 FPS, dropped if busy)
+  static const int _frameIntervalMs = 500;
+  int _lastProcessedTimestamp = 0;
   bool _isProcessing = false;
-  Timer? _scanTimer;
+  bool _isCoolingDown = false;
+  bool _isAttendanceSubmitting = false;
+
+  // In-memory Employee & Biometrics Cache
+  List<Employee> _cachedEmployees = [];
+
+  // Fine-grained UI State Notifiers (Avoid full-screen setState on camera frames)
+  final ValueNotifier<Map<String, dynamic>?> _currentBBoxNotifier = ValueNotifier(null);
+  final ValueNotifier<Size?> _imageSizeNotifier = ValueNotifier(null);
+  final ValueNotifier<String> _statusNotifier = ValueNotifier("Position face in front of camera");
+  final ValueNotifier<Map<String, dynamic>?> _lastMatchDataNotifier = ValueNotifier(null);
+
+  // Timers & Subscriptions
   Timer? _heartbeatTimer;
+  Timer? _cooldownTimer;
+  RealtimeChannel? _notificationsChannel;
   String _selectedPunchMode = 'AUTO';
-  
-  Map<String, dynamic>? _lastMatchData;
-  String _statusMessage = "Position face in front of camera";
   DateTime _lastMatchTime = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lastMatchedEmpId;
-  Map<String, dynamic>? _currentBBox;
-  Size? _imageSize;
   StoreConfig? _storeConfig;
 
   // Liveness State
   String? _livenessEmpId;
-  String _livenessState = 'idle'; // idle -> waiting_neutral -> waiting_smile -> verified
+  String _livenessState = 'idle';
   DateTime _livenessChallengeStartTime = DateTime.now();
+
+  // Diagnostic Counters (Debug performance safety controls)
+  int _totalFramesReceived = 0;
+  int _framesProcessed = 0;
+  int _framesDropped = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // Initialize FaceDetector with performance-focused options
+    _faceDetector = FaceDetector(
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        performanceMode: FaceDetectorMode.fast,
+        minFaceSize: 0.15,
+      ),
+    );
+
+    _mlService.initialize();
     _loadConfig();
+    _loadEmployeesCache();
     _initCamera();
-    _triggerInitialSync();
     _listenForNotifications();
     _startHeartbeat();
   }
 
-  void _startHeartbeat() {
-    // Send a heartbeat every 5 minutes
-    _heartbeatTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
-      _sendHeartbeat();
-    });
-    _sendHeartbeat(); // initial ping
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _stopCameraStream();
+    } else if (state == AppLifecycleState.resumed) {
+      _initCamera();
+      _loadEmployeesCache(); // Refresh cache on resume
+    }
   }
 
-  Future<void> _sendHeartbeat() async {
+  /// Caches all employees and their embeddings into memory so scanning performs 0 SQLite queries
+  Future<void> _loadEmployeesCache() async {
     try {
-      // In a real app, use the actual device ID
-      final deviceId = 'kiosk_${widget.storeId}';
-      
-      await Supabase.instance.client
-          .from('devices')
-          .upsert({
-            'device_uuid': deviceId,
-            'store_id': widget.storeId,
-            'device_name': 'Main Kiosk',
-            'status': 'online',
-            'last_seen_at': DateTime.now().toIso8601String(),
-          });
+      final allEmployees = await DatabaseHelper.instance.getAllEmployees();
+      _cachedEmployees = allEmployees.where((emp) => emp.faceEmbedding != null).toList();
+      debugPrint("[KioskScreen] Cached ${_cachedEmployees.length} employee face embeddings in memory.");
     } catch (e) {
-      debugPrint('Heartbeat failed: $e');
+      debugPrint("[KioskScreen] Error loading employee cache: $e");
     }
   }
 
@@ -89,275 +126,368 @@ class _KioskScreenState extends State<KioskScreen> {
     _storeConfig = await DatabaseHelper.instance.getStoreConfig();
   }
 
-  Future<void> _triggerInitialSync() async {
-    // Firestore handles syncing automatically when online
+  void _startHeartbeat() {
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 5), (_) => _sendHeartbeat());
+    _sendHeartbeat();
   }
 
-  Future<void> _initCamera() async {
-    if (widget.cameras.isEmpty) return;
-    
-    CameraDescription selectedCam = widget.cameras.firstWhere(
-      (cam) => cam.lensDirection == CameraLensDirection.front,
-      orElse: () => widget.cameras.first,
-    );
-
-    _cameraController = CameraController(
-      selectedCam,
-      ResolutionPreset.low,
-      enableAudio: false,
-      imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.jpeg : ImageFormatGroup.bgra8888,
-    );
-
+  Future<void> _sendHeartbeat() async {
     try {
-      await _cameraController!.initialize();
-      if (!mounted) return;
-      setState(() {});
-      _startScanning();
-    } catch (e) {
-      setState(() {
-        _statusMessage = "Camera initialization error: $e";
+      final deviceId = 'kiosk_${widget.storeId}';
+      await Supabase.instance.client.from('devices').upsert({
+        'device_uuid': deviceId,
+        'store_id': widget.storeId,
+        'device_name': 'Main Kiosk',
+        'status': 'online',
+        'last_seen_at': DateTime.now().toIso8601String(),
       });
+    } catch (e) {
+      debugPrint('[KioskScreen] Heartbeat failed: $e');
     }
   }
 
-  void _startScanning() {
-    _scanTimer?.cancel();
-    _scanTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
-      _captureAndProcessFrame();
+  Future<void> _initCamera() async {
+    if (widget.cameras.isEmpty || _isCameraInitializing) return;
+    _isCameraInitializing = true;
+
+    try {
+      // Clean up previous controller safely if any
+      await _stopCameraStream();
+      if (_cameraController != null) {
+        await _cameraController!.dispose();
+        _cameraController = null;
+      }
+
+      _selectedCamera = widget.cameras.firstWhere(
+        (cam) => cam.lensDirection == CameraLensDirection.front,
+        orElse: () => widget.cameras.first,
+      );
+
+      final controller = CameraController(
+        _selectedCamera!,
+        ResolutionPreset.low, // 352x288 / 320x240 for high performance & minimal thermals
+        enableAudio: false,
+        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.yuv420 : ImageFormatGroup.bgra8888,
+      );
+
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      _cameraController = controller;
+      setState(() {});
+
+      _startCameraStream();
+    } catch (e) {
+      debugPrint("[KioskScreen] Camera initialization error: $e");
+      _statusNotifier.value = "Camera error: $e";
+    } finally {
+      _isCameraInitializing = false;
+    }
+  }
+
+  void _startCameraStream() {
+    if (_cameraController == null || !_cameraController!.value.isInitialized || _isStreaming) return;
+
+    try {
+      _isStreaming = true;
+      _cameraController!.startImageStream(_handleCameraFrame);
+    } catch (e) {
+      debugPrint("[KioskScreen] Error starting image stream: $e");
+      _isStreaming = false;
+    }
+  }
+
+  Future<void> _stopCameraStream() async {
+    if (_cameraController != null && _isStreaming) {
+      try {
+        await _cameraController!.stopImageStream();
+      } catch (e) {
+        debugPrint("[KioskScreen] Error stopping image stream: $e");
+      } finally {
+        _isStreaming = false;
+      }
+    }
+  }
+
+  /// High-performance frame gate. Drops frames during processing, cooldown, or when within throttling threshold.
+  void _handleCameraFrame(CameraImage image) {
+    _totalFramesReceived++;
+
+    // 1. Drop frame immediately if busy or in post-attendance cooldown
+    if (_isProcessing || _isCoolingDown || _isAttendanceSubmitting) {
+      _framesDropped++;
+      return;
+    }
+
+    // 2. Frame rate throttle gate (~2 FPS / 500ms)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastProcessedTimestamp < _frameIntervalMs) {
+      _framesDropped++;
+      return;
+    }
+
+    _lastProcessedTimestamp = now;
+    _isProcessing = true;
+    _framesProcessed++;
+
+    if (kDebugMode && _totalFramesReceived % 100 == 0) {
+      debugPrint("[KioskPerf] Rx: $_totalFramesReceived, Processed: $_framesProcessed, Dropped: $_framesDropped");
+    }
+
+    _processFrame(image);
+  }
+
+  /// Complete in-memory zero-disk recognition pipeline
+  Future<void> _processFrame(CameraImage image) async {
+    try {
+      if (_selectedCamera == null || !mounted) return;
+
+      // 1. Convert frame to InputImage directly from memory
+      final inputImage = CameraStreamHelper.inputImageFromCameraImage(
+        image: image,
+        camera: _selectedCamera!,
+      );
+
+      if (inputImage == null) return;
+
+      // 2. Fast face detection using reusable FaceDetector
+      final faces = await _faceDetector.processImage(inputImage);
+
+      if (!mounted || _isCoolingDown) return;
+
+      if (faces.isEmpty) {
+        _currentBBoxNotifier.value = null;
+        if (_lastMatchDataNotifier.value == null) {
+          _statusNotifier.value = "Position face in front of camera";
+        }
+        return;
+      }
+
+      final face = faces.first;
+      final bbox = {
+        'x': face.boundingBox.left,
+        'y': face.boundingBox.top,
+        'width': face.boundingBox.width,
+        'height': face.boundingBox.height,
+      };
+
+      _currentBBoxNotifier.value = bbox;
+      _imageSizeNotifier.value = Size(image.width.toDouble(), image.height.toDouble());
+
+      // 3. Convert YUV to rotated in-memory image ONLY when a face is detected
+      final rotatedImg = CameraStreamHelper.convertYuv420ToRotatedImage(
+        image,
+        _selectedCamera!.sensorOrientation,
+      );
+
+      // 4. Extract Face Embedding via TFLite MobileFaceNet with typed Float32List buffer
+      final currentEmbedding = await _mlService.getEmbeddingFromImage(rotatedImg, bbox);
+      if (currentEmbedding == null || !mounted) return;
+
+      // 5. Match against In-Memory Employee Cache (Zero SQLite queries!)
+      double minDistance = 999.0;
+      Employee? bestMatch;
+
+      for (final emp in _cachedEmployees) {
+        if (emp.faceEmbedding != null) {
+          final double distance = _mlService.calculateEuclideanDistance(currentEmbedding, emp.faceEmbedding!);
+          if (distance < minDistance) {
+            minDistance = distance;
+            bestMatch = emp;
+          }
+        }
+      }
+
+      // Recognition match threshold (MobileFaceNet distance < 1.0)
+      if (bestMatch != null && minDistance < 1.0) {
+        await _handleMatchedFace(bestMatch, minDistance, face);
+      } else {
+        if (_lastMatchDataNotifier.value == null) {
+          _statusNotifier.value = "Face not recognized. Please register first.";
+        }
+      }
+    } catch (e) {
+      debugPrint("[KioskScreen] Frame processing error: $e");
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> _handleMatchedFace(Employee bestMatch, double minDistance, Face face) async {
+    final empId = bestMatch.empId;
+    final now = DateTime.now();
+
+    // Prevent immediate duplicate punches for the same person
+    if (_lastMatchedEmpId == empId && now.difference(_lastMatchTime).inSeconds < 10) {
+      _statusNotifier.value = "Welcome ${bestMatch.name} (Already Marked)";
+      return;
+    }
+
+    // Liveness Detection: Blink to Verify
+    final double leftEye = face.leftEyeOpenProbability ?? 1.0;
+    final double rightEye = face.rightEyeOpenProbability ?? 1.0;
+    final bool isBlinking = leftEye < 0.2 && rightEye < 0.2;
+
+    if (_livenessEmpId != empId || now.difference(_livenessChallengeStartTime).inSeconds > 10) {
+      _livenessEmpId = empId;
+      _livenessChallengeStartTime = now;
+      _livenessState = 'waiting_blink';
+    }
+
+    if (_livenessState == 'waiting_blink') {
+      if (!isBlinking) {
+        _statusNotifier.value = "Please BLINK both eyes to verify!";
+        return;
+      } else {
+        _livenessState = 'verified';
+      }
+    }
+
+    // Success Punch Flow
+    _lastMatchedEmpId = empId;
+    _lastMatchTime = now;
+    _isAttendanceSubmitting = true;
+
+    String punchType = _selectedPunchMode;
+    if (punchType == 'AUTO') {
+      final lastPunch = await _attendanceRepo.getLastPunch(empId);
+      punchType = (lastPunch == 'IN') ? 'OUT' : 'IN';
+    }
+
+    String statusFlag = "Present";
+    if ((2.0 - minDistance) * 50 < 0.6) {
+      statusFlag = "Suspicious";
+    }
+
+    // Check store schedule constraints
+    if (_storeConfig != null) {
+      final nowTime = TimeOfDay.now();
+      if (punchType == "IN") {
+        if (!_isTimeBetween(nowTime, _storeConfig!.punchInStart, _storeConfig!.punchInEnd)) {
+          _statusNotifier.value = "Too early/late for Punch IN";
+          await TtsService.speakMessage("Punch IN not allowed at this time", _storeConfig?.ttsLanguage ?? 'en-IN');
+          _isAttendanceSubmitting = false;
+          return;
+        }
+      } else if (punchType == "OUT") {
+        if (!_isTimeBetween(nowTime, _storeConfig!.punchOutStart, _storeConfig!.punchOutEnd)) {
+          _statusNotifier.value = "Too early/late for Punch OUT";
+          await TtsService.speakMessage("Punch OUT not allowed at this time", _storeConfig?.ttsLanguage ?? 'en-IN');
+          _isAttendanceSubmitting = false;
+          return;
+        }
+      }
+    }
+
+    final confidence = (2.0 - minDistance) * 50;
+    final formattedTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+    try {
+      final newLog = AttendanceLog(
+        empId: empId,
+        empName: bestMatch.name,
+        department: bestMatch.department,
+        punchTime: formattedTime,
+        punchType: punchType,
+        confidence: confidence,
+        status: statusFlag,
+        isSynced: 0,
+      );
+
+      // Save local attendance record
+      await _attendanceRepo.logAttendance(newLog);
+
+      // Instant lightweight upload of pending outbox without downloading remote database
+      SyncService.uploadPendingOutbox(widget.storeId);
+    } catch (e) {
+      debugPrint("[KioskScreen] Failed to save log: $e");
+    }
+
+    final int presentDays = await _attendanceRepo.getPresentDaysThisMonth(empId);
+    final String? checkInTime = await _attendanceRepo.getTodaysCheckInTime(empId);
+
+    final result = {
+      'employee': bestMatch,
+      'punch_type': punchType,
+      'confidence': confidence,
+      'time': DateFormat('hh:mm a').format(now),
+      'present_days': presentDays,
+      'check_in_time': checkInTime ?? DateFormat('hh:mm a').format(now),
+    };
+
+    TtsService.speakAttendance(bestMatch.name, punchType, _storeConfig?.ttsLanguage ?? 'en-IN');
+
+    _livenessState = 'idle';
+    _livenessEmpId = null;
+
+    // Display Success Card
+    _lastMatchDataNotifier.value = result;
+    _statusNotifier.value = "Verified!";
+
+    // --- PAUSE SCANNING & COOLDOWN ---
+    // Pause face recognition for 3.5 seconds to prevent re-triggering and let device rest
+    _isCoolingDown = true;
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer(const Duration(milliseconds: 3500), () {
+      if (mounted) {
+        _lastMatchDataNotifier.value = null;
+        _currentBBoxNotifier.value = null;
+        _statusNotifier.value = "Position face in front of camera";
+        _isCoolingDown = false;
+        _isAttendanceSubmitting = false;
+      }
     });
   }
 
   void _listenForNotifications() {
-    Supabase.instance.client
-        .channel('public:notifications')
+    _notificationsChannel = Supabase.instance.client
+        .channel('public:notifications:kiosk_${widget.storeId}')
         .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'notifications',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'store_id',
-              value: widget.storeId,
-            ),
-            callback: (payload) async {
-              final newRecord = payload.newRecord;
-              if (newRecord.isEmpty) return;
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'store_id',
+            value: widget.storeId,
+          ),
+          callback: (payload) async {
+            final newRecord = payload.newRecord;
+            if (newRecord.isEmpty || !mounted) return;
 
-              final msg = newRecord['message'] as String;
-              final audioPath = newRecord['audio_path'] as String?; // Expected to be full URL or base64
-              
-              if (audioPath != null && audioPath.isNotEmpty) {
-                try {
-                  // If it's a URL or base64 we can play it
-                  if (audioPath.startsWith('http')) {
-                     final player = AudioPlayer();
-                     await player.play(UrlSource(audioPath));
-                  } else {
-                     final bytes = base64Decode(audioPath);
-                     final dir = await getTemporaryDirectory();
-                     final file = File('${dir.path}/announcement_playback.m4a');
-                     await file.writeAsBytes(bytes);
-                     final player = AudioPlayer();
-                     await player.play(DeviceFileSource(file.path));
-                  }
-                } catch (e) {
-                  debugPrint('Error playing voice announcement: $e');
-                  TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
+            final msg = newRecord['message'] as String;
+            final audioPath = newRecord['audio_path'] as String?;
+
+            if (audioPath != null && audioPath.isNotEmpty) {
+              try {
+                await _audioPlayer.stop(); // Stop any currently playing audio
+                if (audioPath.startsWith('http')) {
+                  await _audioPlayer.play(UrlSource(audioPath));
+                } else {
+                  final bytes = base64Decode(audioPath);
+                  final dir = await getTemporaryDirectory();
+                  final file = File('${dir.path}/announcement_playback.m4a');
+                  await file.writeAsBytes(bytes);
+                  await _audioPlayer.play(DeviceFileSource(file.path));
                 }
-              } else {
+              } catch (e) {
+                debugPrint('[KioskScreen] Audio playback error: $e');
                 TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
               }
-              
+            } else {
+              TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
+            }
+
+            if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Announcement: $msg")));
-            })
-        .subscribe();
-  }
-
-  Future<void> _captureAndProcessFrame() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized || _isProcessing) {
-      return;
-    }
-
-    _isProcessing = true;
-
-    try {
-      final XFile file = await _cameraController!.takePicture();
-      final File imageFile = File(file.path);
-
-      final decodedImage = await decodeImageFromList(await file.readAsBytes());
-      if (!mounted) return;
-      _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
-
-      final inputImage = InputImage.fromFile(imageFile);
-      final faceDetector = FaceDetector(options: FaceDetectorOptions(enableClassification: true));
-      final faces = await faceDetector.processImage(inputImage);
-      faceDetector.close();
-
-      if (faces.isNotEmpty) {
-        final face = faces.first;
-        final bbox = {
-          'x': face.boundingBox.left,
-          'y': face.boundingBox.top,
-          'width': face.boundingBox.width,
-          'height': face.boundingBox.height,
-        };
-
-        setState(() {
-          _currentBBox = bbox;
-        });
-
-        final mlService = MLService();
-        await mlService.initialize();
-        final currentEmbedding = await mlService.getEmbedding(imageFile, bbox);
-
-        if (currentEmbedding != null) {
-          final employees = await DatabaseHelper.instance.getAllEmployees();
-          double minDistance = 999.0;
-          Employee? bestMatch;
-
-          for (var emp in employees) {
-            if (emp.faceEmbedding != null) {
-              double distance = mlService.calculateEuclideanDistance(currentEmbedding, emp.faceEmbedding!);
-              if (distance < minDistance) {
-                minDistance = distance;
-                bestMatch = emp;
-              }
             }
-          }
+          },
+        );
 
-          if (bestMatch != null && minDistance < 1.0) {
-            final empId = bestMatch.empId;
-            final now = DateTime.now();
-
-            if (_lastMatchedEmpId == empId && now.difference(_lastMatchTime).inSeconds < 10) {
-              setState(() {
-                _statusMessage = "Welcome ${bestMatch!.name} (Already Marked)";
-              });
-              _isProcessing = false;
-              return;
-            }
-
-            // ---- Liveness Detection: Blink to Verify ----
-            double leftEye = face.leftEyeOpenProbability ?? 1.0;
-            double rightEye = face.rightEyeOpenProbability ?? 1.0;
-            bool isBlinking = leftEye < 0.2 && rightEye < 0.2;
-            
-            if (_livenessEmpId != empId || now.difference(_livenessChallengeStartTime).inSeconds > 10) {
-              _livenessEmpId = empId;
-              _livenessChallengeStartTime = now;
-              _livenessState = 'waiting_blink';
-            }
-
-            if (_livenessState == 'waiting_blink') {
-              if (!isBlinking) {
-                setState(() {
-                  _statusMessage = "Please BLINK both eyes to verify!";
-                });
-                _isProcessing = false;
-                return;
-              } else {
-                _livenessState = 'verified';
-              }
-            }
-            // ---------------------------------------------
-
-            _lastMatchedEmpId = empId;
-            _lastMatchTime = now;
-
-            String punchType = _selectedPunchMode;
-            if (punchType == 'AUTO') {
-               final lastPunch = await _attendanceRepo.getLastPunch(empId);
-               punchType = (lastPunch == 'IN') ? 'OUT' : 'IN';
-            }
-
-            String statusFlag = "Present";
-            if ((2.0 - minDistance) * 50 < 0.6) {
-              statusFlag = "Suspicious";
-            }
-
-            if (_storeConfig != null) {
-              final nowTime = TimeOfDay.now();
-              if (punchType == "IN") {
-                if (!_isTimeBetween(nowTime, _storeConfig!.punchInStart, _storeConfig!.punchInEnd)) {
-                  setState(() => _statusMessage = "Too early/late for Punch IN");
-                  await TtsService.speakMessage("Punch IN not allowed at this time", _storeConfig?.ttsLanguage ?? 'en-IN');
-                  _isProcessing = false;
-                  return;
-                }
-              } else if (punchType == "OUT") {
-                if (!_isTimeBetween(nowTime, _storeConfig!.punchOutStart, _storeConfig!.punchOutEnd)) {
-                  setState(() => _statusMessage = "Too early/late for Punch OUT");
-                  await TtsService.speakMessage("Punch OUT not allowed at this time", _storeConfig?.ttsLanguage ?? 'en-IN');
-                  _isProcessing = false;
-                  return;
-                }
-              }
-            }
-
-            final confidence = (2.0 - minDistance) * 50;
-            final formattedTime = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
-
-            try {
-              final newLog = AttendanceLog(
-                empId: empId,
-                empName: bestMatch.name,
-                department: bestMatch.department,
-                punchTime: formattedTime,
-                punchType: punchType,
-                confidence: confidence,
-                status: statusFlag,
-                isSynced: 0,
-              );
-              await _attendanceRepo.logAttendance(newLog);
-              SyncService.syncAllData(widget.storeId);
-            } catch (e) {
-              debugPrint("Failed to save log: $e");
-            }
-
-            int presentDays = await _attendanceRepo.getPresentDaysThisMonth(empId);
-            String? checkInTime = await _attendanceRepo.getTodaysCheckInTime(empId);
-            
-            final result = {
-              'employee': bestMatch,
-              'punch_type': punchType,
-              'confidence': confidence,
-              'time': DateFormat('hh:mm a').format(now),
-              'present_days': presentDays,
-              'check_in_time': checkInTime ?? DateFormat('hh:mm a').format(now),
-            };
-
-            TtsService.speakAttendance(bestMatch.name, punchType, _storeConfig?.ttsLanguage ?? 'en-IN');
-
-            _livenessState = 'idle';
-            _livenessEmpId = null;
-
-            setState(() {
-              _lastMatchData = result;
-              _statusMessage = "Verified!";
-            });
-            
-          } else {
-            setState(() {
-              _statusMessage = "Face not recognized. Please register first.";
-              _lastMatchData = null;
-            });
-          }
-        }
-      } else {
-        setState(() {
-          _statusMessage = "Searching for faces...";
-          _currentBBox = null;
-        });
-      }
-
-      if (await imageFile.exists()) {
-        await imageFile.delete();
-      }
-    } catch (e) {
-      debugPrint("Frame processing error: $e");
-    } finally {
-      _isProcessing = false;
-    }
+    _notificationsChannel?.subscribe();
   }
 
   bool _isTimeBetween(TimeOfDay time, String startStr, String endStr) {
@@ -367,7 +497,7 @@ class _KioskScreenState extends State<KioskScreen> {
       final s = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
       final e = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
       final t = time.hour * 60 + time.minute;
-      
+
       if (s > e) return t >= s || t <= e;
       return t >= s && t <= e;
     } catch (_) {
@@ -377,16 +507,33 @@ class _KioskScreenState extends State<KioskScreen> {
 
   @override
   void dispose() {
-    _scanTimer?.cancel();
-    _cameraController?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _cooldownTimer?.cancel();
     _heartbeatTimer?.cancel();
+
+    _stopCameraStream();
+    _cameraController?.dispose();
+    _cameraController = null;
+
+    _faceDetector.close();
+    _audioPlayer.dispose();
+
+    if (_notificationsChannel != null) {
+      Supabase.instance.client.removeChannel(_notificationsChannel!);
+    }
+
+    _currentBBoxNotifier.dispose();
+    _imageSizeNotifier.dispose();
+    _statusNotifier.dispose();
+    _lastMatchDataNotifier.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Premium Dark Blue background
+      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -426,9 +573,7 @@ class _KioskScreenState extends State<KioskScreen> {
         children: [
           // Background Camera Preview
           if (_cameraController != null && _cameraController!.value.isInitialized)
-            SizedBox(
-              width: double.infinity,
-              height: double.infinity,
+            SizedBox.expand(
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
@@ -438,8 +583,8 @@ class _KioskScreenState extends State<KioskScreen> {
                 ),
               ),
             ),
-          
-          // Dark Gradient Overlay for premium feel
+
+          // Dark Gradient Overlay
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -455,157 +600,198 @@ class _KioskScreenState extends State<KioskScreen> {
             ),
           ),
 
-          // Face Bounding Box & Status Text
-          if (_lastMatchData == null && _currentBBox != null && _imageSize != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: FaceBoundingBoxPainter(
-                  bbox: _currentBBox!,
-                  imageSize: _imageSize!,
-                  screenSize: MediaQuery.of(context).size,
-                  color: _livenessState == 'waiting_blink' ? Colors.orangeAccent : const Color(0xFF00BFFF),
-                ),
-              ),
-            ),
-            
-          if (_lastMatchData == null)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 250),
-                  const SizedBox(height: 32),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    child: Text(
-                      _statusMessage,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // Target Bounding Box Painter - Rebuilds only when bbox changes
+          ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: _lastMatchDataNotifier,
+            builder: (context, matchData, _) {
+              if (matchData != null) return const SizedBox.shrink();
 
-          // Success ID Card Overlay
-          if (_lastMatchData != null)
-            Center(
-              child: TweenAnimationBuilder(
-                duration: const Duration(milliseconds: 500),
-                tween: Tween<double>(begin: 0.8, end: 1.0),
-                curve: Curves.elasticOut,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: child,
+              return ValueListenableBuilder<Map<String, dynamic>?>(
+                valueListenable: _currentBBoxNotifier,
+                builder: (context, bbox, _) {
+                  if (bbox == null) return const SizedBox.shrink();
+
+                  return ValueListenableBuilder<Size?>(
+                    valueListenable: _imageSizeNotifier,
+                    builder: (context, imgSize, _) {
+                      if (imgSize == null) return const SizedBox.shrink();
+
+                      return Positioned.fill(
+                        child: CustomPaint(
+                          painter: FaceBoundingBoxPainter(
+                            bbox: bbox,
+                            imageSize: imgSize,
+                            screenSize: MediaQuery.of(context).size,
+                            color: _livenessState == 'waiting_blink' ? Colors.orangeAccent : const Color(0xFF00BFFF),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
-                child: Container(
-                  width: 340,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF00BFFF).withValues(alpha: 0.2), blurRadius: 30, spreadRadius: 10),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Using a simple Icon since we don't have a lottie asset downloaded,
-                      // but we can add the lottie widget if they have the asset. 
-                      // The user just said "lottie animation", we will use a highly styled success icon for now
-                      // to simulate the effect, as we don't have the .json file in assets.
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_circle, color: Colors.green, size: 80),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "PUNCH ${_lastMatchData!['punch_type']}",
-                        style: TextStyle(
-                          color: _lastMatchData!['punch_type'] == 'IN' ? Colors.green : Colors.orange,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 24,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const Text("VERIFIED SUCCESSFULLY", style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                      
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Divider(thickness: 2),
-                      ),
-                      
-                      // ID Card Details
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 32,
-                            backgroundColor: const Color(0xFF00BFFF).withValues(alpha: 0.1),
-                            child: Text(
-                              (_lastMatchData!['employee'] as Employee).name[0].toUpperCase(),
-                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF)),
+              );
+            },
+          ),
+
+          // Status Badge Pill - Rebuilds only when status string updates
+          ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: _lastMatchDataNotifier,
+            builder: (context, matchData, _) {
+              if (matchData != null) return const SizedBox.shrink();
+
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 250),
+                    const SizedBox(height: 32),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _statusNotifier,
+                      builder: (context, status, _) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E293B).withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          ),
+                          child: Text(
+                            status,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              letterSpacing: 1.1,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  (_lastMatchData!['employee'] as Employee).name,
-                                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-                                ),
-                                Text(
-                                  (_lastMatchData!['employee'] as Employee).designation,
-                                  style: const TextStyle(color: Color(0xFF00BFFF), fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          // Success ID Card Overlay
+          ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: _lastMatchDataNotifier,
+            builder: (context, matchData, _) {
+              if (matchData == null) return const SizedBox.shrink();
+
+              final employee = matchData['employee'] as Employee;
+              final punchType = matchData['punch_type'] as String;
+
+              return Center(
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 400),
+                  tween: Tween<double>(begin: 0.85, end: 1.0),
+                  curve: Curves.elasticOut,
+                  builder: (context, scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    width: 340,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00BFFF).withValues(alpha: 0.25),
+                          blurRadius: 30,
+                          spreadRadius: 8,
                         ),
-                        child: Column(
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.check_circle, color: Colors.green, size: 72),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "PUNCH $punchType",
+                          style: TextStyle(
+                            color: punchType == 'IN' ? Colors.green : Colors.orange,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const Text(
+                          "VERIFIED SUCCESSFULLY",
+                          style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Divider(thickness: 1.5),
+                        ),
+                        Row(
                           children: [
-                            _buildInfoRow(Icons.badge, "Emp ID", (_lastMatchData!['employee'] as Employee).empId),
-                            const SizedBox(height: 8),
-                            _buildInfoRow(Icons.business, "Dept", (_lastMatchData!['employee'] as Employee).department),
-                            const SizedBox(height: 8),
-                            _buildInfoRow(Icons.access_time, "Punch", _lastMatchData!['time']),
-                            const SizedBox(height: 8),
-                            _buildInfoRow(Icons.calendar_today, "Present (Month)", "${_lastMatchData!['present_days']} Days"),
-                            const SizedBox(height: 8),
-                            _buildInfoRow(Icons.login, "Check-in (Today)", _lastMatchData!['check_in_time']),
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: const Color(0xFF00BFFF).withValues(alpha: 0.1),
+                              child: Text(
+                                employee.name.isNotEmpty ? employee.name[0].toUpperCase() : 'E',
+                                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF)),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    employee.name,
+                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                                  ),
+                                  Text(
+                                    employee.designation,
+                                    style: const TextStyle(color: Color(0xFF00BFFF), fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            children: [
+                              _buildInfoRow(Icons.badge, "Emp ID", employee.empId),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(Icons.business, "Dept", employee.department),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(Icons.access_time, "Punch", matchData['time'] as String),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(Icons.calendar_today, "Present (Month)", "${matchData['present_days']} Days"),
+                              const SizedBox(height: 8),
+                              _buildInfoRow(Icons.login, "Check-in (Today)", matchData['check_in_time'] as String),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -638,37 +824,29 @@ class FaceBoundingBoxPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Assuming portrait mode scaling. Camera images are typically rotated 90 degrees in portrait.
-    // So imageSize.height becomes the width in portrait mode, and imageSize.width becomes the height.
     final bool isPortrait = screenSize.height > screenSize.width;
-    
     final double imgW = isPortrait ? imageSize.height : imageSize.width;
     final double imgH = isPortrait ? imageSize.width : imageSize.height;
 
     final double scaleX = size.width / imgW;
     final double scaleY = size.height / imgH;
 
-    // ML Kit returns coordinates. We map them.
-    // In portrait, x and y might be swapped depending on sensor orientation,
-    // but typically ML Kit Normalizes it if we passed the correct rotation.
-    // Since we don't handle rotation perfectly in MLService, we just do a direct map.
-    // If it's mirrored (front camera), we might need to invert X.
-    double left = bbox['x'] * scaleX;
-    double top = bbox['y'] * scaleY;
-    double width = bbox['width'] * scaleX;
-    double height = bbox['height'] * scaleY;
+    double left = (bbox['x'] as num).toDouble() * scaleX;
+    double top = (bbox['y'] as num).toDouble() * scaleY;
+    double width = (bbox['width'] as num).toDouble() * scaleX;
+    double height = (bbox['height'] as num).toDouble() * scaleY;
 
-    // Simple mirroring for front camera horizontally
+    // Horizontal mirroring for front camera
     left = size.width - left - width;
 
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
+      ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round;
 
-    double cornerLength = 30.0;
-    Path path = Path();
+    const double cornerLength = 28.0;
+    final Path path = Path();
 
     // Top-Left corner
     path.moveTo(left, top + cornerLength);
@@ -695,8 +873,9 @@ class FaceBoundingBoxPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant FaceBoundingBoxPainter oldDelegate) {
-    return oldDelegate.bbox != bbox || oldDelegate.screenSize != screenSize || oldDelegate.imageSize != imageSize || oldDelegate.color != color;
+    return oldDelegate.bbox != bbox ||
+        oldDelegate.screenSize != screenSize ||
+        oldDelegate.imageSize != imageSize ||
+        oldDelegate.color != color;
   }
 }
-
-
