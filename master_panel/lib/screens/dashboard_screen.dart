@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import '../firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart'; // To access adminSupabase
 import 'login_screen.dart';
+import 'store_details_screen.dart';
+import 'applications_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,18 +13,53 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _firestore = FirebaseFirestore.instance;
+  final _supabase = Supabase.instance.client;
+  List<Map<String, dynamic>> _stores = [];
+  bool _isLoading = true;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStores();
+  }
+
+  Future<void> _fetchStores() async {
+    setState(() {
+      _isLoading = true;
+      _error = '';
+    });
+    try {
+      final response = await adminSupabase.from('stores').select().order('created_at', ascending: false);
+      setState(() {
+        _stores = List<Map<String, dynamic>>.from(response);
+      });
+    } catch (e) {
+      setState(() {
+        _error = "Error fetching stores: $e";
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
+    await _supabase.auth.signOut();
     if (mounted) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
     }
   }
 
   Future<void> _toggleStoreStatus(String storeId, String currentStatus) async {
-    final newStatus = currentStatus == 'active' ? 'paused' : 'active';
-    await _firestore.collection('stores').doc(storeId).update({'status': newStatus});
+    final newStatus = currentStatus == 'active' ? 'locked' : 'active';
+    try {
+      await adminSupabase.from('stores').update({'status': newStatus}).eq('id', storeId);
+      _fetchStores();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   Future<void> _deleteStore(String storeId) async {
@@ -52,7 +87,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (confirm == true) {
-      await _firestore.collection('stores').doc(storeId).delete();
+      try {
+        await adminSupabase.from('stores').delete().eq('id', storeId);
+        _fetchStores();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting store: $e')));
+        }
+      }
     }
   }
 
@@ -60,18 +102,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const AddStoreDialog(),
+      builder: (ctx) => AddStoreDialog(onStoreAdded: _fetchStores),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text("Master Admin Dashboard", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        actions: [
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1E293B),
+          title: const Text("Master Admin Dashboard", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          bottom: const TabBar(
+            labelColor: Colors.cyanAccent,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Colors.cyanAccent,
+            tabs: [
+              Tab(icon: Icon(Icons.store), text: "Active Stores"),
+              Tab(icon: Icon(Icons.pending_actions), text: "Pending Applications"),
+            ],
+          ),
+          actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.cyanAccent),
+            onPressed: _fetchStores,
+            tooltip: "Refresh",
+          ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.cyanAccent),
             onPressed: _logout,
@@ -79,142 +137,132 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('stores').orderBy('createdAt', descending: true).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
-          }
+        body: TabBarView(
+          children: [
+            // TAB 1: STORES
+            _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
+                : _error.isNotEmpty
+                    ? Center(child: Text(_error, style: const TextStyle(color: Colors.redAccent)))
+                    : _stores.isEmpty
+                        ? const Center(
+                            child: Text("No stores found. Click + to add a store.", style: TextStyle(color: Colors.grey, fontSize: 18)),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                int crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : (constraints.maxWidth > 600 ? 2 : 1));
+                          
+                          return GridView.builder(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              childAspectRatio: 1.5,
+                            ),
+                            itemCount: _stores.length,
+                            itemBuilder: (context, index) {
+                              final store = _stores[index];
+                              final storeId = store['id'];
+                              final name = store['store_name'] ?? 'Unknown Store';
+                              final status = store['status'] ?? 'active';
 
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.redAccent)));
-          }
-
-          final stores = snapshot.data?.docs ?? [];
-
-          if (stores.isEmpty) {
-            return const Center(
-              child: Text("No stores found. Click + to add a store.", style: TextStyle(color: Colors.grey, fontSize: 18)),
-            );
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                int crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : (constraints.maxWidth > 600 ? 2 : 1));
-                
-                return GridView.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.5,
-                  ),
-                  itemCount: stores.length,
-                  itemBuilder: (context, index) {
-                    final store = stores[index].data() as Map<String, dynamic>;
-                    final storeId = stores[index].id;
-                    final name = store['name'] ?? 'Unknown Store';
-                    final adminEmail = store['adminEmail'] ?? 'N/A';
-                    final kioskEmail = store['kioskEmail'] ?? 'N/A';
-                    final status = store['status'] ?? 'active';
-
-                    return Card(
-                      color: const Color(0xFF1E293B),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    name,
-                                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: status == 'active' ? Colors.green.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    status.toUpperCase(),
-                                    style: TextStyle(
-                                      color: status == 'active' ? Colors.greenAccent : Colors.orangeAccent,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                              return InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => StoreDetailsScreen(store: store),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Card(
+                                  color: const Color(0xFF1E293B),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  elevation: 4,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                name,
+                                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: status == 'active' ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                status.toUpperCase(),
+                                                style: TextStyle(
+                                                  color: status == 'active' ? Colors.greenAccent : Colors.redAccent,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Divider(color: Colors.white24, height: 24),
+                                        const Text("Manage this store via the options below.", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                                        const Spacer(),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            TextButton.icon(
+                                              icon: Icon(status == 'active' ? Icons.lock : Icons.lock_open, color: status == 'active' ? Colors.redAccent : Colors.greenAccent),
+                                              label: Text(status == 'active' ? "Lock" : "Enable", style: TextStyle(color: status == 'active' ? Colors.redAccent : Colors.greenAccent)),
+                                              onPressed: () => _toggleStoreStatus(storeId, status),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                              onPressed: () => _deleteStore(storeId),
+                                              tooltip: "Delete Store",
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                            const Divider(color: Colors.white24, height: 24),
-                            Row(
-                              children: [
-                                const Icon(Icons.admin_panel_settings, color: Colors.grey, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(adminEmail, style: const TextStyle(color: Colors.grey, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(Icons.qr_code_scanner, color: Colors.grey, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(kioskEmail, style: const TextStyle(color: Colors.grey, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                              ],
-                            ),
-                            const Spacer(),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton.icon(
-                                  icon: Icon(status == 'active' ? Icons.pause : Icons.play_arrow, color: status == 'active' ? Colors.orangeAccent : Colors.greenAccent),
-                                  label: Text(status == 'active' ? "Pause" : "Activate", style: TextStyle(color: status == 'active' ? Colors.orangeAccent : Colors.greenAccent)),
-                                  onPressed: () => _toggleStoreStatus(storeId, status),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                  onPressed: () => _deleteStore(storeId),
-                                  tooltip: "Delete Store",
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              );
+                            },
+                          );
+                        }
                       ),
-                    );
-                  },
-                );
-              }
-            ),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddStoreDialog,
-        backgroundColor: Colors.cyanAccent,
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text("Add Store", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+            // TAB 2: APPLICATIONS
+            ApplicationsTab(onApplicationApproved: _fetchStores),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _showAddStoreDialog,
+          backgroundColor: Colors.cyanAccent,
+          icon: const Icon(Icons.add, color: Colors.black),
+          label: const Text("Add Store", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        ),
       ),
     );
   }
 }
 
 // ----------------------------------------------------------------------
-// ADD STORE DIALOG (Handles Secondary Firebase App for Auth creation)
+// ADD STORE DIALOG (Handles Supabase Admin API for Auth creation)
 // ----------------------------------------------------------------------
 class AddStoreDialog extends StatefulWidget {
-  const AddStoreDialog({super.key});
+  final VoidCallback onStoreAdded;
+  const AddStoreDialog({super.key, required this.onStoreAdded});
 
   @override
   State<AddStoreDialog> createState() => _AddStoreDialogState();
@@ -222,16 +270,19 @@ class AddStoreDialog extends StatefulWidget {
 
 class _AddStoreDialogState extends State<AddStoreDialog> {
   final _nameController = TextEditingController();
+  final _idController = TextEditingController();
   final _passwordController = TextEditingController(text: "password123");
   bool _isLoading = false;
   String _error = '';
 
   Future<void> _createStore() async {
-    final storeName = _nameController.text.trim().replaceAll(' ', '').toLowerCase();
+    final storeNameStr = _nameController.text.trim();
+    final storeIdStr = _idController.text.trim();
+    final sanitizedStoreId = storeIdStr.replaceAll(' ', '').toLowerCase();
     final password = _passwordController.text.trim();
 
-    if (storeName.isEmpty || password.length < 6) {
-      setState(() => _error = "Valid Store ID (no spaces) and Password (6+ chars) required.");
+    if (storeNameStr.isEmpty || sanitizedStoreId.isEmpty || password.length < 6) {
+      setState(() => _error = "Valid Store Name, Store ID, and Password (6+ chars) required.");
       return;
     }
 
@@ -240,35 +291,56 @@ class _AddStoreDialogState extends State<AddStoreDialog> {
       _error = '';
     });
 
-    FirebaseApp? secondaryApp;
     try {
-      final adminEmail = "admin@$storeName.in";
-      final kioskEmail = "kiosk@$storeName.in";
+      final adminEmail = "admin@$sanitizedStoreId.in";
+      final kioskEmail = "kiosk@$sanitizedStoreId.in";
 
-      // 1. Initialize Secondary Firebase App to create users without logging out Master Admin
-      secondaryApp = await Firebase.initializeApp(
-        name: 'SecondaryApp_${DateTime.now().millisecondsSinceEpoch}',
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-
-      // 2. Create Admin Account
-      await secondaryAuth.createUserWithEmailAndPassword(email: adminEmail, password: password);
-      
-      // 3. Create Kiosk Account
-      await secondaryAuth.createUserWithEmailAndPassword(email: kioskEmail, password: password);
-
-      // 4. Save to Firestore (using primary app instance)
-      await FirebaseFirestore.instance.collection('stores').doc(storeName).set({
-        'name': _nameController.text.trim(),
-        'storeId': storeName,
-        'adminEmail': adminEmail,
-        'kioskEmail': kioskEmail,
+      // 1. Insert store into 'stores' table using standard client
+      final storeResponse = await adminSupabase.from('stores').insert({
+        'store_name': storeNameStr,
+        'store_code': sanitizedStoreId,
         'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      }).select().single();
+      
+      final String storeId = storeResponse['id'];
+
+      // 2. Create Admin Account via Admin API (bypasses email confirmation)
+      final adminUserResponse = await adminSupabase.auth.admin.createUser(
+        AdminUserAttributes(
+          email: adminEmail,
+          password: password,
+          emailConfirm: true,
+        )
+      );
+
+      // 3. Create Kiosk Account via Admin API
+      final kioskUserResponse = await adminSupabase.auth.admin.createUser(
+        AdminUserAttributes(
+          email: kioskEmail,
+          password: password,
+          emailConfirm: true,
+        )
+      );
+      
+      // 4. Update profiles to set roles and store_id
+      if (adminUserResponse.user != null) {
+        await adminSupabase.from('profiles').insert({
+          'id': adminUserResponse.user!.id,
+          'role': 'admin',
+          'store_id': storeId,
+        });
+      }
+      
+      if (kioskUserResponse.user != null) {
+        await adminSupabase.from('profiles').insert({
+          'id': kioskUserResponse.user!.id,
+          'role': 'kiosk',
+          'store_id': storeId,
+        });
+      }
 
       if (mounted) {
+        widget.onStoreAdded();
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -276,9 +348,6 @@ class _AddStoreDialogState extends State<AddStoreDialog> {
         _error = e.toString();
       });
     } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -286,6 +355,7 @@ class _AddStoreDialogState extends State<AddStoreDialog> {
   @override
   void dispose() {
     _nameController.dispose();
+    _idController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -315,7 +385,19 @@ class _AddStoreDialogState extends State<AddStoreDialog> {
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                labelText: "Store Name (e.g. My Shop)",
+                labelText: "Store Name (e.g. Akm tech Multidivision)",
+                labelStyle: const TextStyle(color: Colors.grey),
+                filled: true,
+                fillColor: const Color(0xFF0F172A),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _idController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Store ID/Code (e.g. akm)",
                 labelStyle: const TextStyle(color: Colors.grey),
                 filled: true,
                 fillColor: const Color(0xFF0F172A),

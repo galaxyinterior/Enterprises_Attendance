@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/database_helper.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/store_config.dart';
 import 'package:record/record.dart';
 import 'dart:io';
@@ -163,19 +163,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final payload = <String, dynamic>{
+        'store_id': widget.storeId,
         'message': msg.isNotEmpty ? msg : "Voice Announcement",
-        'timestamp': FieldValue.serverTimestamp(),
       };
       
       if (audioBase64 != null) {
-        payload['audioBase64'] = audioBase64;
+        payload['audio_path'] = audioBase64;
       }
 
-      await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(widget.storeId)
-          .collection('notifications')
-          .add(payload);
+      await Supabase.instance.client
+          .from('notifications')
+          .insert(payload);
       
       _announcementController.clear();
       setState(() {

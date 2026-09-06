@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart'; // To access MainNavigationContainer and globalCameras
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'apply_for_store_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,16 +29,38 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
+      // Check if store is locked
+      if (response.user != null) {
+        final profileData = await Supabase.instance.client
+            .from('profiles')
+            .select('store_id')
+            .eq('id', response.user!.id)
+            .maybeSingle();
+
+        if (profileData != null && profileData['store_id'] != null) {
+          final storeData = await Supabase.instance.client
+              .from('stores')
+              .select('status')
+              .eq('id', profileData['store_id'])
+              .maybeSingle();
+
+          if (storeData != null && storeData['status'] == 'locked') {
+            await Supabase.instance.client.auth.signOut();
+            throw const AuthException('This store has been locked by the Master Admin.');
+          }
+        }
+      }
+
       if (!mounted) return;
       // StreamBuilder in main.dart handles navigation automatically
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       setState(() {
-        _errorMessage = e.message ?? 'Invalid email or password.';
+        _errorMessage = e.message;
         _isLoading = false;
       });
     } catch (e) {
@@ -46,6 +69,14 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _handleSignUp() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ApplyForStoreScreen(),
+      ),
+    );
   }
 
   @override
@@ -179,6 +210,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 "Access Dashboard",
                                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                               ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: _handleSignUp,
+                      child: const Text(
+                        "Apply for Store",
+                        style: TextStyle(color: Colors.cyanAccent),
                       ),
                     ),
                   ],

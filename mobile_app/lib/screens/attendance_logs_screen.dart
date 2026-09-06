@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/attendance_log.dart';
-import '../services/database_helper.dart';
+import '../repositories/attendance_repository.dart';
 import '../services/sync_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -19,21 +18,32 @@ class AttendanceLogsScreen extends StatefulWidget {
 }
 
 class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
+  final AttendanceRepository _attendanceRepo = AttendanceRepository();
+  bool _isLoading = true;
+  List<AttendanceLog> _logs = [];
+
   @override
   void initState() {
     super.initState();
+    _loadLogs();
+  }
+
+  Future<void> _loadLogs() async {
+    setState(() => _isLoading = true);
+    _logs = await _attendanceRepo.getAllLogs();
+    setState(() => _isLoading = false);
   }
 
   Future<void> _manualSync() async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Syncing to cloud...")));
     await SyncService.syncAllData(widget.storeId);
-    setState(() {});
+    await _loadLogs();
   }
 
   Future<void> _exportData() async {
     try {
-      final logs = await DatabaseHelper.instance.getAllAttendanceLogs();
+      final logs = await _attendanceRepo.getAllLogs();
       if (logs.isEmpty) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No data to export.")));
         return;
@@ -75,13 +85,13 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             tooltip: "Logout",
             onPressed: () async {
-              await FirebaseAuth.instance.signOut();
+              await Supabase.instance.client.auth.signOut();
             },
           ),
         ],
       ),
       body: FutureBuilder<List<AttendanceLog>>(
-        future: DatabaseHelper.instance.getAllAttendanceLogs(),
+        future: _attendanceRepo.getAllLogs(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

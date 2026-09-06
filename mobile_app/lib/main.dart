@@ -7,9 +7,8 @@ import 'screens/login_screen.dart';
 import 'screens/face_data_screen.dart';
 import 'screens/store_config_screen.dart';
 import 'screens/employee_list_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart';
+import 'screens/onboarding_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/sync_service.dart';
@@ -20,11 +19,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+    await Supabase.initialize(
+      url: 'https://txvxgxcdkqrzfatinrqa.supabase.co',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4dnhneGNka3FyemZhdGlucnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NTk2MTIsImV4cCI6MjEwMzMzNTYxMn0.sb05nzdgWkmDz9phz0-TumEn0xqPu42liS0LFUt-xOE',
     );
   } catch (e) {
-    debugPrint("Firebase initialization failed: $e");
+    debugPrint("Supabase initialization failed: $e");
   }
 
   try {
@@ -59,11 +59,12 @@ class AttendanceApp extends StatelessWidget {
           centerTitle: true,
         ),
       ),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
+      home: StreamBuilder<AuthState>(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          if (snapshot.hasData && snapshot.data != null) {
-            return AuthenticatedApp(user: snapshot.data!, cameras: globalCameras);
+          final session = snapshot.data?.session;
+          if (session != null) {
+            return AuthenticatedApp(user: session.user, cameras: globalCameras);
           }
           return const LoginScreen();
         },
@@ -85,40 +86,105 @@ class AuthenticatedApp extends StatefulWidget {
 class _AuthenticatedAppState extends State<AuthenticatedApp> {
   Timer? _syncTimer;
   StreamSubscription? _connectivitySubscription;
-  late String storeId;
-  late String role;
+  String? storeId;
+  String? role;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _parseUserDetails();
-    _setupAutoSync();
-    
-    // Trigger initial restore/sync on login
-    SyncService.syncAllData(storeId);
+    _fetchProfile();
   }
 
-  void _parseUserDetails() {
-    final email = widget.user.email ?? "";
-    if (email.contains("@")) {
-      final parts = email.split("@");
-      role = parts[0];
-      final domain = parts[1];
-      storeId = domain.split(".")[0];
-    } else {
-      role = "kiosk";
-      storeId = "default";
+  Future<void> _fetchProfile() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select('role, store_id')
+          .eq('id', widget.user.id)
+          .single();
+          
+      String? fetchedStoreId = data['store_id'] as String?;
+      String storeStatus = 'active';
+
+      if (fetchedStoreId != null) {
+        try {
+          final storeData = await Supabase.instance.client
+              .from('stores')
+              .select('status')
+              .eq('id', fetchedStoreId)
+              .single();
+          storeStatus = storeData['status'] as String? ?? 'active';
+        } catch (_) {}
+      }
+
+      if (storeStatus == 'locked') {
+        await Supabase.instance.client.auth.signOut();
+        return; // StreamBuilder will redirect to LoginScreen
+      }
+
+      setState(() {
+        role = data['role'] as String?;
+        storeId = fetchedStoreId;
+        _isLoading = false;
+      });
+
+      if (storeId != null) {
+        _setupAutoSync();
+        SyncService.syncAllData(storeId!);
+      }
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST116') {
+        // No profile found, navigate to OnboardingScreen
+        debugPrint('Postgrest error: Profile not found. Navigating to OnboardingScreen.');
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => OnboardingScreen(user: widget.user),
+            ),
+          );
+        }
+      } else {
+        debugPrint('Postgrest error fetching profile: $e');
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Database Error"),
+              content: Text(e.message),
+              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
+            ),
+          );
+        }
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Error"),
+            content: Text(e.toString()),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
+          ),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   void _setupAutoSync() {
+    if (storeId == null) return;
     _syncTimer = Timer.periodic(const Duration(hours: 3), (timer) {
-      SyncService.syncAllData(storeId);
+      SyncService.syncAllData(storeId!);
     });
 
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
       if (!result.contains(ConnectivityResult.none)) {
-        SyncService.syncAllData(storeId);
+        SyncService.syncAllData(storeId!);
       }
     });
   }
@@ -132,10 +198,18 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    
+    if (storeId == null || role == null) {
+      return const Scaffold(body: Center(child: Text("Error: Profile not found or incomplete.")));
+    }
+
     if (role == "admin") {
-      return AdminPanel(storeId: storeId, cameras: widget.cameras);
+      return AdminPanel(storeId: storeId!, cameras: widget.cameras);
     } else {
-      return KioskNavigationContainer(cameras: widget.cameras, storeId: storeId);
+      return KioskNavigationContainer(cameras: widget.cameras, storeId: storeId!);
     }
   }
 }
@@ -161,7 +235,7 @@ class _KioskNavigationContainerState extends State<KioskNavigationContainer> {
           actions: [
             IconButton(
               icon: const Icon(Icons.logout, color: Colors.redAccent),
-              onPressed: () => FirebaseAuth.instance.signOut(),
+              onPressed: () => Supabase.instance.client.auth.signOut(),
             )
           ],
         ),
@@ -173,7 +247,7 @@ class _KioskNavigationContainerState extends State<KioskNavigationContainer> {
           actions: [
             IconButton(
               icon: const Icon(Icons.logout, color: Colors.redAccent),
-              onPressed: () => FirebaseAuth.instance.signOut(),
+              onPressed: () => Supabase.instance.client.auth.signOut(),
             )
           ],
         ),

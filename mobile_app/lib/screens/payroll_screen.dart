@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/database_helper.dart';
 import '../models/employee.dart';
+import '../repositories/attendance_repository.dart';
+import '../repositories/employee_repository.dart';
 import '../models/attendance_log.dart';
 import 'package:jiffy/jiffy.dart';
 
@@ -13,6 +14,9 @@ class PayrollScreen extends StatefulWidget {
 }
 
 class _PayrollScreenState extends State<PayrollScreen> {
+  final AttendanceRepository _attendanceRepo = AttendanceRepository();
+  final EmployeeRepository _employeeRepo = EmployeeRepository();
+  
   List<Employee> _employees = [];
   List<AttendanceLog> _logs = [];
   bool _isLoading = true;
@@ -25,8 +29,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final emps = await DatabaseHelper.instance.getAllEmployees();
-    final logs = await DatabaseHelper.instance.getAllAttendanceLogs();
+    final emps = await _employeeRepo.getAllEmployees();
+    final logs = await _attendanceRepo.getAllLogs();
     
     setState(() {
       _employees = emps;
@@ -47,7 +51,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
     final presentCount = presentDaysSet.length;
     
     // Fetch Overrides
-    final overrides = await DatabaseHelper.instance.getPayrollRecord(emp.empId, currentMonthStr);
+    final overrides = await _employeeRepo.getPayrollRecord(emp.empId, currentMonthStr);
     
     showModalBottomSheet(
       context: context,
@@ -62,6 +66,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
           initialDeduction: overrides?['deduction'] ?? 0.0,
           initialPaidAbsent: overrides?['paid_absent_days'] ?? 0,
           onUpdate: _loadData,
+          employeeRepo: _employeeRepo,
         );
       }
     );
@@ -109,6 +114,7 @@ class _PayrollDetailsSheet extends StatefulWidget {
   final double initialDeduction;
   final int initialPaidAbsent;
   final VoidCallback onUpdate;
+  final EmployeeRepository employeeRepo;
 
   const _PayrollDetailsSheet({
     required this.employee,
@@ -119,6 +125,7 @@ class _PayrollDetailsSheet extends StatefulWidget {
     required this.initialDeduction,
     required this.initialPaidAbsent,
     required this.onUpdate,
+    required this.employeeRepo,
   });
 
   @override
@@ -148,14 +155,14 @@ class _PayrollDetailsSheetState extends State<_PayrollDetailsSheet> {
 
   Future<void> _saveSalary() async {
     final val = double.tryParse(_salaryCtrl.text) ?? 0.0;
-    await DatabaseHelper.instance.updateEmployeeSalary(widget.employee.empId, val);
+    await widget.employeeRepo.updateEmployeeSalary(widget.employee.empId, val);
     widget.onUpdate();
     if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Salary Updated")));
     setState(() {}); // Trigger recalc
   }
 
   Future<void> _saveOverrides() async {
-    await DatabaseHelper.instance.savePayrollRecord(
+    await widget.employeeRepo.savePayrollRecord(
       widget.employee.empId, 
       widget.currentMonthStr,
       bonus: _bonus,

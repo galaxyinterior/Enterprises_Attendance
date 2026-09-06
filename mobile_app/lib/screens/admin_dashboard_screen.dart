@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/database_helper.dart';
+import '../repositories/attendance_repository.dart';
+import '../repositories/employee_repository.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -21,9 +22,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _loadStats() async {
-    final emps = await DatabaseHelper.instance.getAllEmployees();
+    final emps = await EmployeeRepository().getAllEmployees();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    final logs = await DatabaseHelper.instance.getAllAttendanceLogs();
+    final logs = await AttendanceRepository().getAllLogs();
     
     final todayLogs = logs.where((log) => log.punchTime.startsWith(today)).toList();
     final uniquePunchedEmps = todayLogs.map((e) => e.empId).toSet().length;

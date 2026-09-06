@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:intl/intl.dart';
 import '../models/attendance_log.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../services/ml_service.dart';
 import '../models/employee.dart';
 import '../services/database_helper.dart';
+import '../repositories/attendance_repository.dart';
 import '../services/tts_service.dart';
 
 import '../services/sync_service.dart';
@@ -27,9 +28,11 @@ class KioskScreen extends StatefulWidget {
 }
 
 class _KioskScreenState extends State<KioskScreen> {
+  final AttendanceRepository _attendanceRepo = AttendanceRepository();
   CameraController? _cameraController;
   bool _isProcessing = false;
   Timer? _scanTimer;
+  Timer? _heartbeatTimer;
   String _selectedPunchMode = 'AUTO';
   
   Map<String, dynamic>? _lastMatchData;
@@ -52,6 +55,34 @@ class _KioskScreenState extends State<KioskScreen> {
     _initCamera();
     _triggerInitialSync();
     _listenForNotifications();
+    _startHeartbeat();
+  }
+
+  void _startHeartbeat() {
+    // Send a heartbeat every 5 minutes
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      _sendHeartbeat();
+    });
+    _sendHeartbeat(); // initial ping
+  }
+
+  Future<void> _sendHeartbeat() async {
+    try {
+      // In a real app, use the actual device ID
+      final deviceId = 'kiosk_${widget.storeId}';
+      
+      await Supabase.instance.client
+          .from('devices')
+          .upsert({
+            'device_uuid': deviceId,
+            'store_id': widget.storeId,
+            'device_name': 'Main Kiosk',
+            'status': 'online',
+            'last_seen_at': DateTime.now().toIso8601String(),
+          });
+    } catch (e) {
+      debugPrint('Heartbeat failed: $e');
+    }
   }
 
   Future<void> _loadConfig() async {
@@ -97,42 +128,49 @@ class _KioskScreenState extends State<KioskScreen> {
   }
 
   void _listenForNotifications() {
-    // Listen for custom TTS notifications from Admin
-    FirebaseFirestore.instance
-        .collection('stores')
-        .doc(widget.storeId)
-        .collection('notifications')
-        .orderBy('timestamp', descending: true)
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) async {
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final msg = data['message'];
-        final ts = data['timestamp'] as Timestamp?;
-        // Only speak if it's less than 2 minutes old
-        if (ts != null && DateTime.now().difference(ts.toDate()).inMinutes < 2) {
-           final audioBase64 = data['audioBase64'];
-           if (audioBase64 != null && audioBase64.isNotEmpty) {
-             try {
-               final bytes = base64Decode(audioBase64);
-               final dir = await getTemporaryDirectory();
-               final file = File('${dir.path}/announcement_playback.m4a');
-               await file.writeAsBytes(bytes);
-               
-               final player = AudioPlayer();
-               await player.play(DeviceFileSource(file.path));
-             } catch (e) {
-               debugPrint('Error playing voice announcement: $e');
-               TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
-             }
-           } else {
-             TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
-           }
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Announcement: $msg")));
-        }
-      }
-    });
+    Supabase.instance.client
+        .channel('public:notifications')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'store_id',
+              value: widget.storeId,
+            ),
+            callback: (payload) async {
+              final newRecord = payload.newRecord;
+              if (newRecord.isEmpty) return;
+
+              final msg = newRecord['message'] as String;
+              final audioPath = newRecord['audio_path'] as String?; // Expected to be full URL or base64
+              
+              if (audioPath != null && audioPath.isNotEmpty) {
+                try {
+                  // If it's a URL or base64 we can play it
+                  if (audioPath.startsWith('http')) {
+                     final player = AudioPlayer();
+                     await player.play(UrlSource(audioPath));
+                  } else {
+                     final bytes = base64Decode(audioPath);
+                     final dir = await getTemporaryDirectory();
+                     final file = File('${dir.path}/announcement_playback.m4a');
+                     await file.writeAsBytes(bytes);
+                     final player = AudioPlayer();
+                     await player.play(DeviceFileSource(file.path));
+                  }
+                } catch (e) {
+                  debugPrint('Error playing voice announcement: $e');
+                  TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
+                }
+              } else {
+                TtsService.speakMessage(msg, _storeConfig?.ttsLanguage ?? 'en-IN');
+              }
+              
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Announcement: $msg")));
+            })
+        .subscribe();
   }
 
   Future<void> _captureAndProcessFrame() async {
@@ -228,8 +266,8 @@ class _KioskScreenState extends State<KioskScreen> {
 
             String punchType = _selectedPunchMode;
             if (punchType == 'AUTO') {
-               final lastPunch = await DatabaseHelper.instance.getLastPunch(empId);
-               punchType = (lastPunch?.punchType == 'IN') ? 'OUT' : 'IN';
+               final lastPunch = await _attendanceRepo.getLastPunch(empId);
+               punchType = (lastPunch == 'IN') ? 'OUT' : 'IN';
             }
 
             String statusFlag = "Present";
@@ -270,14 +308,14 @@ class _KioskScreenState extends State<KioskScreen> {
                 status: statusFlag,
                 isSynced: 0,
               );
-              await DatabaseHelper.instance.insertAttendanceLog(newLog);
+              await _attendanceRepo.logAttendance(newLog);
               SyncService.syncAllData(widget.storeId);
             } catch (e) {
               debugPrint("Failed to save log: $e");
             }
 
-            int presentDays = await DatabaseHelper.instance.getPresentDaysThisMonth(empId);
-            String? checkInTime = await DatabaseHelper.instance.getTodaysCheckInTime(empId);
+            int presentDays = await _attendanceRepo.getPresentDaysThisMonth(empId);
+            String? checkInTime = await _attendanceRepo.getTodaysCheckInTime(empId);
             
             final result = {
               'employee': bestMatch,
@@ -341,6 +379,7 @@ class _KioskScreenState extends State<KioskScreen> {
   void dispose() {
     _scanTimer?.cancel();
     _cameraController?.dispose();
+    _heartbeatTimer?.cancel();
     super.dispose();
   }
 

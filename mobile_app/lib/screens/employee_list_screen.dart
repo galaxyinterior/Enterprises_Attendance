@@ -2,8 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../models/employee.dart';
-import '../services/database_helper.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../repositories/employee_repository.dart';
 import 'face_data_screen.dart';
 
 class EmployeeListScreen extends StatefulWidget {
@@ -16,9 +15,23 @@ class EmployeeListScreen extends StatefulWidget {
 }
 
 class _EmployeeListScreenState extends State<EmployeeListScreen> {
+  final EmployeeRepository _employeeRepo = EmployeeRepository();
+  List<Employee> _employees = [];
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
+    _loadEmployees();
+  }
+
+  Future<void> _loadEmployees() async {
+    setState(() => _isLoading = true);
+    final data = await _employeeRepo.getAllEmployees();
+    setState(() {
+      _employees = data;
+      _isLoading = false;
+    });
   }
 
   void _openRegisterDialog() {
@@ -71,15 +84,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
     if (confirm2 != true) return;
 
-    // Delete locally
-    final db = await DatabaseHelper.instance.database;
-    await db.delete('employees', where: 'emp_id = ?', whereArgs: [emp.empId]);
-
-    // Delete from Firestore
+    // Delete locally and from Firestore
     try {
-      await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('employees').doc(emp.empId).delete();
+      await _employeeRepo.deleteEmployee(emp.empId, widget.storeId);
     } catch (e) {
-      debugPrint("Could not delete from Firestore: $e");
+      debugPrint("Could not delete employee: $e");
     }
 
     if (mounted) {
@@ -171,7 +180,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         onPressed: _openRegisterDialog,
       ),
       body: FutureBuilder<List<Employee>>(
-        future: DatabaseHelper.instance.getAllEmployees(),
+        future: _employeeRepo.getAllEmployees(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF00BFFF)));

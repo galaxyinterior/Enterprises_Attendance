@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/database_helper.dart';
+import '../repositories/attendance_repository.dart';
+import '../repositories/employee_repository.dart';
 import '../models/attendance_log.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'dart:io';
@@ -16,11 +17,30 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   bool _isExporting = false;
+  final AttendanceRepository _attendanceRepo = AttendanceRepository();
+  final EmployeeRepository _employeeRepo = EmployeeRepository();
+  List<AttendanceLog> _logs = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final logs = await _attendanceRepo.getAllLogs();
+    setState(() {
+      _logs = logs;
+      _isLoading = false;
+    });
+  }
 
   Future<void> _exportToExcel() async {
     setState(() => _isExporting = true);
     try {
-      final logs = await DatabaseHelper.instance.getAllAttendanceLogs();
+      final logs = await _attendanceRepo.getAllLogs();
       
       final xlsio.Workbook workbook = xlsio.Workbook();
       final xlsio.Worksheet sheet = workbook.worksheets[0];
@@ -74,7 +94,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         title: const Text("Attendance Reports", style: TextStyle(fontWeight: FontWeight.bold)),
       ),
       body: FutureBuilder<List<AttendanceLog>>(
-        future: DatabaseHelper.instance.getAllAttendanceLogs(),
+        future: _attendanceRepo.getAllLogs(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFF00BFFF)));

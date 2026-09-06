@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,6 +14,46 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String _errorMessage = '';
+
+  Future<void> _signUp() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
+      if (email.isEmpty || password.isEmpty) {
+        setState(() => _errorMessage = "Email and Password are required.");
+        return;
+      }
+
+      final response = await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: password,
+      );
+
+      if (response.user != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account created successfully! Logging in...')),
+          );
+        }
+      }
+    } on AuthException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = "An error occurred: $e";
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _login() async {
     setState(() {
@@ -31,20 +71,16 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final response = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
-      // Successfully logged in
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
+      // Verify role is superadmin or admin
+      // StreamBuilder in main.dart will automatically redirect on successful login
+    } on AuthException catch (e) {
       setState(() {
-        _errorMessage = e.message ?? "Authentication Failed";
+        _errorMessage = e.message;
       });
     } catch (e) {
       setState(() {
@@ -173,6 +209,24 @@ class _LoginScreenState extends State<LoginScreen> {
                           "Sign In",
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: TextButton(
+                  onPressed: _isLoading ? null : _signUp,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.cyanAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    "Create Account",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],

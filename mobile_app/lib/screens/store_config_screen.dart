@@ -114,7 +114,7 @@ class _StoreConfigScreenState extends State<StoreConfigScreen> {
     );
 
     await DatabaseHelper.instance.saveStoreConfig(config);
-    await SyncService.pushStoreConfig(widget.storeId, config);
+    await SyncService.syncAllData(widget.storeId);
 
     setState(() => _isSaving = false);
 
