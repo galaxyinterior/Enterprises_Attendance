@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
+import 'core/constants/app_colors.dart';
 import 'features/auth/master_login_screen.dart';
 import 'features/dashboard/master_control_panel_screen.dart';
 
@@ -26,12 +27,13 @@ class MasterPanelApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        scaffoldBackgroundColor: AppColors.bgDark,
+        cardColor: AppColors.cardDark,
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF6366F1),
-          secondary: Color(0xFF818CF8),
-          surface: Color(0xFF1E293B),
+          primary: AppColors.kesariSaffron,
+          secondary: AppColors.haldiGold,
+          surface: AppColors.cardDark,
         ),
       ),
       home: const AuthWrapper(),
@@ -49,9 +51,9 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            backgroundColor: Color(0xFF0F172A),
+            backgroundColor: AppColors.bgDark,
             body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+              child: CircularProgressIndicator(color: AppColors.kesariSaffron),
             ),
           );
         }

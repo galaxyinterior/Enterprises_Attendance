@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/services/email_notification_service.dart';
 import '../../models/registration_request_model.dart';
 
@@ -69,22 +70,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: AppColors.cardDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: AppColors.cardBorderDark),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 28),
+              const Icon(Icons.check_circle_rounded, color: AppColors.pannaEmerald, size: 28),
               const SizedBox(width: 10),
-              Text('Submitted Successfully', style: GoogleFonts.outfit(color: Colors.white)),
+              Text('Submitted Successfully', style: GoogleFonts.outfit(color: AppColors.textPrimary)),
             ],
           ),
           content: Text(
             'Your application ID is $appId.\n\nThe Master Administrator will review your registration and send your Shop ID & Login Credentials shortly.',
-            style: GoogleFonts.inter(color: const Color(0xFFCBD5E1)),
+            style: GoogleFonts.inter(color: AppColors.textSecondary),
           ),
           actions: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.kesariSaffron),
               onPressed: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).pop(); // Back to Login
@@ -97,7 +101,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error submitting request: $e')),
+        SnackBar(
+          content: Text('Error submitting request: $e'),
+          backgroundColor: AppColors.sindoorRed,
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -107,11 +114,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.bgDark,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text('Register New Business / Shop', style: GoogleFonts.outfit(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: AppColors.cardDark,
+        title: Text('Register New Business / Shop', style: GoogleFonts.outfit(color: AppColors.textPrimary)),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -120,9 +127,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             constraints: const BoxConstraints(maxWidth: 600),
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: AppColors.cardDark,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: AppColors.cardBorderDark),
             ),
             child: Form(
               key: _formKey,
@@ -134,13 +141,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     style: GoogleFonts.outfit(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Fill out your business details to request access to the Smart Attendance Ecosystem.',
-                    style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 13),
+                    style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
                   ),
                   const SizedBox(height: 24),
 
@@ -161,13 +168,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   _buildTextField(_addressController, 'Address', Icons.home_outlined),
 
                   const SizedBox(height: 24),
-                  SizedBox(
+                  Container(
                     width: double.infinity,
                     height: 50,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.saffronGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.kesariSaffron.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _submitRegistration,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4F46E5),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isSubmitting
@@ -198,16 +217,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: AppColors.textPrimary),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-          prefixIcon: Icon(icon, color: const Color(0xFF818CF8)),
+          labelStyle: const TextStyle(color: AppColors.textMuted),
+          prefixIcon: Icon(icon, color: AppColors.haldiGold),
           filled: true,
-          fillColor: const Color(0xFF0F172A),
+          fillColor: AppColors.inputBgDark,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: AppColors.cardBorderDark),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.cardBorderDark),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.kesariSaffron),
           ),
         ),
         validator: (val) => (val == null || val.trim().isEmpty) ? 'Required' : null,
@@ -215,3 +242,4 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 }
+

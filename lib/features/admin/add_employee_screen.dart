@@ -7,6 +7,7 @@ import 'package:camera/camera.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/services/face_recognition_service.dart';
 import '../../models/employee_model.dart';
 
@@ -151,7 +152,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please capture employee face data before saving!'),
-          backgroundColor: Colors.amber,
+          backgroundColor: AppColors.haldiGold,
         ),
       );
       return;
@@ -193,7 +194,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Employee "${employee.fullName}" registered successfully with Face Data!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.pannaEmerald,
         ),
       );
 
@@ -201,7 +202,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving employee: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text('Error saving employee: $e'), backgroundColor: AppColors.sindoorRed),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -214,14 +215,14 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     final isDesktop = screenWidth > 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.bgDark,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: AppColors.cardDark,
         title: Text(
           'Register New Staff Employee',
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -253,7 +254,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
-        color: const Color(0xFF1E293B),
+        color: AppColors.cardDark,
         child: Center(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 1100),
@@ -262,28 +263,35 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               children: [
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF94A3B8),
-                    side: const BorderSide(color: Color(0xFF334155)),
+                    foregroundColor: AppColors.textMuted,
+                    side: const BorderSide(color: AppColors.cardBorderDark),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text('CANCEL'),
                 ),
                 const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.saffronGradient,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  icon: _isSaving
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-                  label: Text(
-                    _isSaving ? 'SAVING EMPLOYEE...' : 'SAVE & ENROLL EMPLOYEE',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: _isSaving
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+                    label: Text(
+                      _isSaving ? 'SAVING EMPLOYEE...' : 'SAVE & ENROLL EMPLOYEE',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                    ),
+                    onPressed: _isSaving ? null : _saveEmployee,
                   ),
-                  onPressed: _isSaving ? null : _saveEmployee,
                 ),
               ],
             ),
@@ -297,20 +305,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppColors.cardDark,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: AppColors.cardBorderDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.badge_outlined, color: Color(0xFF818CF8), size: 24),
+              const Icon(Icons.badge_outlined, color: AppColors.haldiGold, size: 24),
               const SizedBox(width: 10),
               Text(
                 '1. Employee Information',
-                style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -352,20 +360,21 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Assigned Shift', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
+                    Text('Assigned Shift', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
                     const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: AppColors.inputBgDark,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cardBorderDark),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          dropdownColor: const Color(0xFF1E293B),
+                          dropdownColor: AppColors.cardDark,
                           isExpanded: true,
                           value: _selectedShift,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
                           items: const [
                             DropdownMenuItem(value: 'Morning Shift (10:00 AM - 06:30 PM)', child: Text('Morning Shift (10 AM - 6:30 PM)')),
                             DropdownMenuItem(value: 'Evening Shift (02:00 PM - 10:30 PM)', child: Text('Evening Shift (2 PM - 10:30 PM)')),
@@ -385,7 +394,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
           ),
 
           const SizedBox(height: 12),
-          Text('Joining Date', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
+          Text('Joining Date', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
           const SizedBox(height: 6),
           InkWell(
             onTap: () async {
@@ -400,16 +409,17 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: AppColors.inputBgDark,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.cardBorderDark),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_today_rounded, color: Color(0xFF818CF8), size: 18),
+                  const Icon(Icons.calendar_today_rounded, color: AppColors.haldiGold, size: 18),
                   const SizedBox(width: 10),
                   Text(
                     DateFormat('dd MMMM yyyy').format(_joiningDate),
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: AppColors.textPrimary),
                   ),
                 ],
               ),
@@ -424,27 +434,27 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppColors.cardDark,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: AppColors.cardBorderDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.face_retouching_natural_rounded, color: Colors.greenAccent, size: 24),
+              const Icon(Icons.face_retouching_natural_rounded, color: AppColors.pannaEmerald, size: 24),
               const SizedBox(width: 10),
               Text(
                 '2. First-Time Face Enrolment',
-                style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             'Face features captured here will be used by Entrance Kiosk for instant facial verification.',
-            style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12),
+            style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
           ),
           const SizedBox(height: 20),
 
@@ -453,10 +463,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
             height: 260,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: AppColors.inputBgDark,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: _enrolledFaceEmbedding != null ? Colors.greenAccent : const Color(0xFF334155),
+                color: _enrolledFaceEmbedding != null ? AppColors.pannaEmerald : AppColors.cardBorderDark,
                 width: _enrolledFaceEmbedding != null ? 2 : 1,
               ),
             ),
@@ -473,16 +483,16 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.camera_front_rounded, color: Color(0xFF818CF8), size: 54),
+                        const Icon(Icons.camera_front_rounded, color: AppColors.haldiGold, size: 54),
                         const SizedBox(height: 12),
                         Text(
                           _isCameraInitialized ? 'Camera Ready' : 'Live Camera / Photo Mode',
-                          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.inter(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Position face clearly in front of camera',
-                          style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12),
+                          style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
@@ -494,7 +504,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                       height: 160,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.6), width: 2),
+                        border: Border.all(color: AppColors.pannaEmerald.withValues(alpha: 0.6), width: 2),
                       ),
                     ),
                 ],
@@ -510,18 +520,18 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: _enrolledFaceEmbedding != null
-                    ? Colors.green.withValues(alpha: 0.15)
-                    : const Color(0xFF0F172A),
+                    ? AppColors.pannaEmerald.withValues(alpha: 0.15)
+                    : AppColors.inputBgDark,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _enrolledFaceEmbedding != null ? Colors.greenAccent : const Color(0xFF334155),
+                  color: _enrolledFaceEmbedding != null ? AppColors.pannaEmerald : AppColors.cardBorderDark,
                 ),
               ),
               child: Row(
                 children: [
                   Icon(
                     _enrolledFaceEmbedding != null ? Icons.verified_rounded : Icons.info_outline_rounded,
-                    color: _enrolledFaceEmbedding != null ? Colors.greenAccent : const Color(0xFF818CF8),
+                    color: _enrolledFaceEmbedding != null ? AppColors.pannaEmerald : AppColors.haldiGold,
                     size: 20,
                   ),
                   const SizedBox(width: 10),
@@ -529,7 +539,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
                     child: Text(
                       _faceStatusMessage!,
                       style: GoogleFonts.inter(
-                        color: _enrolledFaceEmbedding != null ? Colors.greenAccent : const Color(0xFFCBD5E1),
+                        color: _enrolledFaceEmbedding != null ? AppColors.pannaEmerald : AppColors.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -547,7 +557,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
             height: 48,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _enrolledFaceEmbedding != null ? Colors.amber.shade900 : Colors.green,
+                backgroundColor: _enrolledFaceEmbedding != null ? AppColors.haldiGold : AppColors.pannaEmerald,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               icon: _isCapturingFace
@@ -579,16 +589,24 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(color: AppColors.textPrimary),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-          prefixIcon: Icon(icon, color: const Color(0xFF818CF8)),
+          labelStyle: const TextStyle(color: AppColors.textMuted),
+          prefixIcon: Icon(icon, color: AppColors.haldiGold),
           filled: true,
-          fillColor: const Color(0xFF0F172A),
+          fillColor: AppColors.inputBgDark,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+            borderSide: const BorderSide(color: AppColors.cardBorderDark),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.cardBorderDark),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.kesariSaffron),
           ),
         ),
         validator: validator,
@@ -596,3 +614,4 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen> {
     );
   }
 }
+

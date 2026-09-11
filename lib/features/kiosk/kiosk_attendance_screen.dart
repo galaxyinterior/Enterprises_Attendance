@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/services/face_recognition_service.dart';
 import '../../core/services/voice_announcements_service.dart';
 import '../../core/services/offline_db_service.dart';
@@ -155,21 +156,28 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text('Exit Kiosk Mode', style: GoogleFonts.outfit(color: Colors.white)),
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.cardBorderDark),
+        ),
+        title: Text('Exit Kiosk Mode', style: GoogleFonts.outfit(color: AppColors.textPrimary)),
         content: TextField(
           controller: pinCtrl,
           obscureText: true,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: AppColors.textPrimary),
           decoration: const InputDecoration(
             labelText: 'Enter Admin Password / PIN',
-            labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+            labelStyle: TextStyle(color: AppColors.textMuted),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.sindoorRed),
             onPressed: () {
               Navigator.pop(context);
               Navigator.of(context).pushReplacement(
@@ -186,7 +194,7 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.bgDark,
       body: Stack(
         children: [
           // Camera / Scanner Background Area
@@ -197,14 +205,14 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
                 // Shop Name Header
                 Text(
                   'SHOP KIOSK: ${widget.shopId}',
-                  style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: GoogleFonts.outfit(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _isShopPaused ? '⚠️ SERVICE TEMPORARILY PAUSED BY ADMIN' : 'SMART ATTENDANCE SCANNER ACTIVE',
                   style: GoogleFonts.inter(
                     fontSize: 14,
-                    color: _isShopPaused ? Colors.amberAccent : Colors.greenAccent,
+                    color: _isShopPaused ? AppColors.haldiGold : AppColors.pannaEmerald,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -218,27 +226,27 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
                     height: 280,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF1E293B),
+                      color: AppColors.cardDark,
                       border: Border.all(
                         color: _isShopPaused
-                            ? Colors.amber
-                            : (_lastRecognizedName != null ? Colors.greenAccent : const Color(0xFF6366F1)),
+                            ? AppColors.haldiGold
+                            : (_lastRecognizedName != null ? AppColors.pannaEmerald : AppColors.kesariSaffron),
                         width: 4,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: (_lastRecognizedName != null ? Colors.greenAccent : const Color(0xFF6366F1)).withOpacity(0.3),
+                          color: (_lastRecognizedName != null ? AppColors.pannaEmerald : AppColors.kesariSaffron).withValues(alpha: 0.3),
                           blurRadius: 30,
                         ),
                       ],
                     ),
                     child: Center(
                       child: _isProcessing
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? const CircularProgressIndicator(color: AppColors.kesariSaffron)
                           : Icon(
                               _lastRecognizedName != null ? Icons.check_circle_rounded : Icons.face_retouching_natural_rounded,
                               size: 100,
-                              color: _lastRecognizedName != null ? Colors.greenAccent : Colors.white70,
+                              color: _lastRecognizedName != null ? AppColors.pannaEmerald : Colors.white70,
                             ),
                     ),
                   ),
@@ -249,18 +257,19 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: AppColors.cardDark,
                     borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: AppColors.cardBorderDark),
                   ),
                   child: Text(
                     _statusMessage,
-                    style: GoogleFonts.inter(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(fontSize: 16, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   '(Tap scanner box to simulate live face recognition)',
-                  style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8)),
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted),
                 ),
               ],
             ),
@@ -272,9 +281,9 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
             bottom: 20,
             child: Row(
               children: [
-                const Icon(Icons.cloud_done_rounded, color: Colors.greenAccent, size: 20),
+                const Icon(Icons.cloud_done_rounded, color: AppColors.pannaEmerald, size: 20),
                 const SizedBox(width: 8),
-                Text('Offline Queue Protected | Connected', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
+                Text('Offline Queue Protected | Connected', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
               ],
             ),
           ),
@@ -294,3 +303,4 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
     );
   }
 }
+

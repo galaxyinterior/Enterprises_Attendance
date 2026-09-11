@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'core/services/sync_engine.dart';
+import 'core/constants/app_colors.dart';
 import 'features/auth/login_screen.dart';
 
 void main() async {
@@ -29,15 +30,17 @@ class AttendanceApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        scaffoldBackgroundColor: AppColors.bgDark,
+        cardColor: AppColors.cardDark,
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF6366F1),
-          secondary: Color(0xFF818CF8),
-          surface: Color(0xFF1E293B),
+          primary: AppColors.kesariSaffron,
+          secondary: AppColors.haldiGold,
+          surface: AppColors.cardDark,
         ),
       ),
       home: const LoginScreen(),
     );
   }
 }
+

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/services/shop_provisioning_service.dart';
 import '../../models/registration_request_model.dart';
 import '../../models/business_model.dart';
@@ -26,9 +27,9 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
     final isMobile = screenWidth < 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: AppColors.bgDark,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: AppColors.cardDark,
         elevation: 4,
         title: FittedBox(
           fit: BoxFit.scaleDown,
@@ -38,7 +39,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF6366F1),
+                  gradient: AppColors.saffronGradient,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 20),
@@ -46,18 +47,18 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
               const SizedBox(width: 10),
               Text(
                 'MASTER CONTROL PANEL',
-                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: isMobile ? 15 : 18),
+                style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: isMobile ? 15 : 18),
               ),
               if (!isMobile) ...[
                 const SizedBox(width: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.2),
+                    color: AppColors.pannaEmerald.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4)),
+                    border: Border.all(color: AppColors.pannaEmerald.withValues(alpha: 0.4)),
                   ),
-                  child: const Text('SUPER ADMIN', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: const Text('SUPER ADMIN', style: TextStyle(color: AppColors.pannaEmerald, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
               ],
             ],
@@ -65,7 +66,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            icon: const Icon(Icons.logout_rounded, color: AppColors.sindoorRed),
             tooltip: 'Sign Out Master Panel',
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
@@ -86,7 +87,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
           // Navigation Tabs (Horizontally Scrollable for Mobile)
           Container(
             width: double.infinity,
-            color: const Color(0xFF1E293B),
+            color: AppColors.cardDark,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -134,16 +135,16 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: const Color(0xFF0F172A),
+          color: AppColors.bgDark,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildMetricCard('Total Shops', '$totalShops', Colors.indigoAccent, Icons.store_rounded, isMobile),
+                _buildMetricCard('Total Shops', '$totalShops', AppColors.kesariSaffron, Icons.store_rounded, isMobile),
                 const SizedBox(width: 12),
-                _buildMetricCard('Active Shops', '$activeShops', Colors.greenAccent, Icons.check_circle_rounded, isMobile),
+                _buildMetricCard('Active Shops', '$activeShops', AppColors.pannaEmerald, Icons.check_circle_rounded, isMobile),
                 const SizedBox(width: 12),
-                _buildMetricCard('Paused Shops', '$pausedShops', Colors.amberAccent, Icons.pause_circle_rounded, isMobile),
+                _buildMetricCard('Paused Shops', '$pausedShops', AppColors.haldiGold, Icons.pause_circle_rounded, isMobile),
               ],
             ),
           ),
@@ -157,7 +158,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
       constraints: BoxConstraints(minWidth: isMobile ? 140 : 180),
       padding: EdgeInsets.all(isMobile ? 12 : 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: AppColors.cardDark,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
@@ -169,8 +170,8 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(count, style: GoogleFonts.outfit(fontSize: isMobile ? 20 : 24, fontWeight: FontWeight.bold, color: Colors.white)),
-              Text(title, style: GoogleFonts.inter(fontSize: isMobile ? 11 : 12, color: const Color(0xFF94A3B8))),
+              Text(count, style: GoogleFonts.outfit(fontSize: isMobile ? 20 : 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              Text(title, style: GoogleFonts.inter(fontSize: isMobile ? 11 : 12, color: AppColors.textMuted)),
             ],
           ),
         ],
@@ -187,7 +188,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
+              color: isSelected ? AppColors.kesariSaffron : Colors.transparent,
               width: 3,
             ),
           ),
@@ -195,12 +196,12 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF94A3B8), size: 18),
+            Icon(icon, color: isSelected ? AppColors.kesariSaffron : AppColors.textMuted, size: 18),
             const SizedBox(width: 8),
             Text(
               label,
               style: GoogleFonts.inter(
-                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                color: isSelected ? AppColors.textPrimary : AppColors.textMuted,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 13,
               ),
@@ -218,7 +219,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
           .where('status', isEqualTo: AppConstants.statusPending)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.kesariSaffron));
 
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
@@ -226,13 +227,13 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.task_alt_rounded, size: 56, color: Colors.greenAccent),
+                const Icon(Icons.task_alt_rounded, size: 56, color: AppColors.pannaEmerald),
                 const SizedBox(height: 14),
-                Text('No Pending Applications', style: GoogleFonts.outfit(fontSize: 18, color: Colors.white)),
+                Text('No Pending Applications', style: GoogleFonts.outfit(fontSize: 18, color: AppColors.textPrimary)),
                 const SizedBox(height: 4),
                 Text(
                   'All new shop registrations have been reviewed and provisioned.',
-                  style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 13),
+                  style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -248,9 +249,12 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
             final request = RegistrationRequestModel.fromMap(data);
 
             return Card(
-              color: const Color(0xFF1E293B),
+              color: AppColors.cardDark,
               margin: const EdgeInsets.only(bottom: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.cardBorderDark),
+              ),
               child: Padding(
                 padding: EdgeInsets.all(isMobile ? 14 : 20),
                 child: Column(
@@ -262,33 +266,46 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         Expanded(
                           child: Text(
                             request.shopName,
-                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Chip(
                           label: Text(request.applicationId, style: const TextStyle(color: Colors.white, fontSize: 11)),
-                          backgroundColor: const Color(0xFF6366F1),
+                          backgroundColor: AppColors.kesariSaffron,
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('Owner: ${request.ownerName} | Phone: ${request.phone}', style: GoogleFonts.inter(color: const Color(0xFFCBD5E1), fontSize: 13)),
-                    Text('Email: ${request.email}', style: GoogleFonts.inter(color: const Color(0xFFCBD5E1), fontSize: 13)),
-                    Text('Location: ${request.city}, ${request.state} | Type: ${request.businessType} | Staff: ${request.employeeCount}', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
+                    Text('Owner: ${request.ownerName} | Phone: ${request.phone}', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13)),
+                    Text('Email: ${request.email}', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13)),
+                    Text('Location: ${request.city}, ${request.state} | Type: ${request.businessType} | Staff: ${request.employeeCount}', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
                     const SizedBox(height: 16),
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                          icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
-                          label: const Text('APPROVE & PROVISION SHOP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                          onPressed: () => _approveRequest(request),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: AppColors.saffronGradient,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                            icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                            label: const Text('APPROVE & PROVISION SHOP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () => _approveRequest(request),
+                          ),
                         ),
                         OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.sindoorRed,
+                            side: const BorderSide(color: AppColors.sindoorRed),
+                          ),
                           icon: const Icon(Icons.close_rounded, size: 18),
                           label: const Text('REJECT', style: TextStyle(fontSize: 12)),
                           onPressed: () => _rejectRequest(request),
@@ -333,25 +350,28 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
             final kioskEmailPreview = currentShopId.isNotEmpty ? '$currentShopId@kiosk.in' : '-';
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: AppColors.cardDark,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: AppColors.cardBorderDark),
+              ),
               title: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.2),
+                      color: AppColors.pannaEmerald.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.storefront_rounded, color: Colors.greenAccent, size: 24),
+                    child: const Icon(Icons.storefront_rounded, color: AppColors.pannaEmerald, size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Approve & Provision Shop', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text(request.shopName, style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 13)),
+                        Text('Approve & Provision Shop', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(request.shopName, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13)),
                       ],
                     ),
                   ),
@@ -368,21 +388,21 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                       children: [
                         const Text(
                           'Shop ID & Passwords are auto-generated. You can customize them or click 🔄 to re-generate.',
-                          style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                         ),
                         const SizedBox(height: 16),
 
                         // Manual Shop ID Field
                         TextFormField(
                           controller: shopIdController,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1),
+                          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, letterSpacing: 1),
                           decoration: InputDecoration(
                             labelText: 'Shop ID (Editable)',
-                            labelStyle: const TextStyle(color: Color(0xFF818CF8)),
+                            labelStyle: const TextStyle(color: AppColors.haldiGold),
                             hintText: 'e.g. SHOP001',
-                            prefixIcon: const Icon(Icons.fingerprint, color: Color(0xFF818CF8)),
+                            prefixIcon: const Icon(Icons.fingerprint, color: AppColors.haldiGold),
                             suffixIcon: IconButton(
-                              icon: const Icon(Icons.refresh, color: Colors.white70),
+                              icon: const Icon(Icons.refresh, color: AppColors.textMuted),
                               tooltip: 'Auto-generate new Shop ID',
                               onPressed: () {
                                 setDialogState(() {
@@ -391,8 +411,19 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                               },
                             ),
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: AppColors.inputBgDark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.kesariSaffron),
+                            ),
                           ),
                           onChanged: (_) => setDialogState(() {}),
                           validator: (val) {
@@ -406,14 +437,25 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         // User Email Address Field
                         TextFormField(
                           controller: emailController,
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             labelText: 'Recipient Email Address',
-                            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                            prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF818CF8)),
+                            labelStyle: const TextStyle(color: AppColors.textMuted),
+                            prefixIcon: const Icon(Icons.email_outlined, color: AppColors.haldiGold),
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: AppColors.inputBgDark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.kesariSaffron),
+                            ),
                           ),
                           validator: (val) {
                             if (val == null || val.trim().isEmpty || !val.contains('@')) return 'Enter a valid email address';
@@ -426,16 +468,16 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         TextFormField(
                           controller: adminPasswordController,
                           obscureText: obscureAdminPass,
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             labelText: 'Shop Admin Password (Auto-generated)',
-                            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                            prefixIcon: const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF818CF8)),
+                            labelStyle: const TextStyle(color: AppColors.textMuted),
+                            prefixIcon: const Icon(Icons.admin_panel_settings_outlined, color: AppColors.haldiGold),
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.refresh_rounded, color: Colors.amberAccent),
+                                  icon: const Icon(Icons.refresh_rounded, color: AppColors.haldiGold),
                                   tooltip: 'Re-generate Auto Password',
                                   onPressed: () {
                                     setDialogState(() {
@@ -444,14 +486,25 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                                   },
                                 ),
                                 IconButton(
-                                  icon: Icon(obscureAdminPass ? Icons.visibility_off : Icons.visibility, color: Colors.white70),
+                                  icon: Icon(obscureAdminPass ? Icons.visibility_off : Icons.visibility, color: AppColors.textMuted),
                                   onPressed: () => setDialogState(() => obscureAdminPass = !obscureAdminPass),
                                 ),
                               ],
                             ),
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: AppColors.inputBgDark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.kesariSaffron),
+                            ),
                           ),
                           validator: (val) => (val == null || val.trim().length < 6) ? 'Password must be at least 6 characters' : null,
                         ),
@@ -461,16 +514,16 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         TextFormField(
                           controller: kioskPasswordController,
                           obscureText: obscureKioskPass,
-                          style: const TextStyle(color: Colors.white),
+                          style: const TextStyle(color: AppColors.textPrimary),
                           decoration: InputDecoration(
                             labelText: 'Kiosk App Password (Auto-generated)',
-                            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                            prefixIcon: const Icon(Icons.desktop_windows_outlined, color: Color(0xFF38BDF8)),
+                            labelStyle: const TextStyle(color: AppColors.textMuted),
+                            prefixIcon: const Icon(Icons.desktop_windows_outlined, color: AppColors.mayurBlue),
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.refresh_rounded, color: Colors.cyanAccent),
+                                  icon: const Icon(Icons.refresh_rounded, color: AppColors.mayurBlue),
                                   tooltip: 'Re-generate Auto Password',
                                   onPressed: () {
                                     setDialogState(() {
@@ -479,14 +532,25 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                                   },
                                 ),
                                 IconButton(
-                                  icon: Icon(obscureKioskPass ? Icons.visibility_off : Icons.visibility, color: Colors.white70),
+                                  icon: Icon(obscureKioskPass ? Icons.visibility_off : Icons.visibility, color: AppColors.textMuted),
                                   onPressed: () => setDialogState(() => obscureKioskPass = !obscureKioskPass),
                                 ),
                               ],
                             ),
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            fillColor: AppColors.inputBgDark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.cardBorderDark),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.kesariSaffron),
+                            ),
                           ),
                           validator: (val) => (val == null || val.trim().length < 6) ? 'Password must be at least 6 characters' : null,
                         ),
@@ -496,30 +560,30 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
+                            color: AppColors.inputBgDark,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF334155)),
+                            border: Border.all(color: AppColors.cardBorderDark),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('GENERATED LOGIN CREDENTIALS:', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                              const Text('GENERATED LOGIN CREDENTIALS:', style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
-                                  const Icon(Icons.admin_panel_settings, color: Color(0xFF818CF8), size: 16),
+                                  const Icon(Icons.admin_panel_settings, color: AppColors.haldiGold, size: 16),
                                   const SizedBox(width: 6),
-                                  Text('Admin ID: ', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
-                                  Text(adminEmailPreview, style: GoogleFonts.inter(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                  Text('Admin ID: ', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
+                                  Text(adminEmailPreview, style: GoogleFonts.inter(color: AppColors.pannaEmerald, fontWeight: FontWeight.bold, fontSize: 12)),
                                 ],
                               ),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.computer, color: Color(0xFF38BDF8), size: 16),
+                                  const Icon(Icons.computer, color: AppColors.mayurBlue, size: 16),
                                   const SizedBox(width: 6),
-                                  Text('Kiosk ID: ', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
-                                  Text(kioskEmailPreview, style: GoogleFonts.inter(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                                  Text('Kiosk ID: ', style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 12)),
+                                  Text(kioskEmailPreview, style: GoogleFonts.inter(color: AppColors.mayurBlue, fontWeight: FontWeight.bold, fontSize: 12)),
                                 ],
                               ),
                             ],
@@ -533,105 +597,115 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
               actions: [
                 TextButton(
                   onPressed: isProcessing ? null : () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                  child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.saffronGradient,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  icon: isProcessing
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
-                  label: Text(
-                    isProcessing ? 'PROVISIONING...' : 'PROVISION & SEND MAIL',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: isProcessing
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) return;
-                          setDialogState(() => isProcessing = true);
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: isProcessing
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                    label: Text(
+                      isProcessing ? 'PROVISIONING...' : 'PROVISION & SEND MAIL',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setDialogState(() => isProcessing = true);
 
-                          final result = await ShopProvisioningService().provisionShop(
-                            request: request,
-                            customShopId: shopIdController.text,
-                            adminPassword: adminPasswordController.text,
-                            kioskPassword: kioskPasswordController.text,
-                            userEmail: emailController.text,
-                          );
+                            final result = await ShopProvisioningService().provisionShop(
+                              request: request,
+                              customShopId: shopIdController.text,
+                              adminPassword: adminPasswordController.text,
+                              kioskPassword: kioskPasswordController.text,
+                              userEmail: emailController.text,
+                            );
 
-                          if (!dialogCtx.mounted) return;
-                          Navigator.pop(dialogCtx);
+                            if (!dialogCtx.mounted) return;
+                            Navigator.pop(dialogCtx);
 
-                          if (!mounted) return;
+                            if (!mounted) return;
 
-                          if (result.success) {
-                            showDialog(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                backgroundColor: const Color(0xFF1E293B),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                title: Row(
-                                  children: [
-                                    const Icon(Icons.check_circle, color: Colors.greenAccent, size: 28),
-                                    const SizedBox(width: 10),
-                                    Text('Shop Provisioned!', style: GoogleFonts.outfit(color: Colors.white)),
-                                  ],
-                                ),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Assigned Shop ID: ${result.shopId}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    const SizedBox(height: 12),
-                                    Text('Firebase Auth Admin: ${result.adminEmail}', style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                    Text('Firebase Auth Kiosk: ${result.kioskEmail}', style: const TextStyle(color: Colors.white, fontSize: 13)),
-                                    const SizedBox(height: 12),
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: result.emailSent ? Colors.green.withValues(alpha: 0.15) : Colors.amber.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: result.emailSent ? Colors.greenAccent : Colors.amberAccent),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(result.emailSent ? Icons.mark_email_read : Icons.warning_amber_rounded,
-                                              color: result.emailSent ? Colors.greenAccent : Colors.amberAccent, size: 20),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              result.emailSent
-                                                  ? 'Credentials Email successfully sent to ${emailController.text}!'
-                                                  : 'Shop provisioned but credentials email could not be sent. Check SMTP credentials.',
-                                              style: TextStyle(color: result.emailSent ? Colors.greenAccent : Colors.amberAccent, fontSize: 12),
+                            if (result.success) {
+                              showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  backgroundColor: AppColors.cardDark,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: const BorderSide(color: AppColors.cardBorderDark),
+                                  ),
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: AppColors.pannaEmerald, size: 28),
+                                      const SizedBox(width: 10),
+                                      Text('Shop Provisioned!', style: GoogleFonts.outfit(color: AppColors.textPrimary)),
+                                    ],
+                                  ),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Assigned Shop ID: ${result.shopId}', style: const TextStyle(color: AppColors.pannaEmerald, fontWeight: FontWeight.bold, fontSize: 16)),
+                                      const SizedBox(height: 12),
+                                      Text('Firebase Auth Admin: ${result.adminEmail}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                                      Text('Firebase Auth Kiosk: ${result.kioskEmail}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: result.emailSent ? AppColors.pannaEmerald.withValues(alpha: 0.15) : AppColors.haldiGold.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: result.emailSent ? AppColors.pannaEmerald : AppColors.haldiGold),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(result.emailSent ? Icons.mark_email_read : Icons.warning_amber_rounded,
+                                                color: result.emailSent ? AppColors.pannaEmerald : AppColors.haldiGold, size: 20),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                result.emailSent
+                                                    ? 'Credentials Email successfully sent to ${emailController.text}!'
+                                                    : 'Shop provisioned but credentials email could not be sent. Check SMTP credentials.',
+                                                style: TextStyle(color: result.emailSent ? AppColors.pannaEmerald : AppColors.haldiGold, fontSize: 12),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.kesariSaffron),
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('OK', style: TextStyle(color: Colors.white)),
                                     ),
                                   ],
                                 ),
-                                actions: [
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('OK', style: TextStyle(color: Colors.white)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Provisioning Failed: ${result.errorMessage}'),
-                                backgroundColor: Colors.redAccent,
-                              ),
-                            );
-                          }
-                        },
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Provisioning Failed: ${result.errorMessage}'),
+                                  backgroundColor: AppColors.sindoorRed,
+                                ),
+                              );
+                            }
+                          },
+                  ),
                 ),
               ],
             );
@@ -652,7 +726,7 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection(AppConstants.colBusinesses).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppColors.kesariSaffron));
 
         final docs = snapshot.data!.docs;
         return ListView.builder(
@@ -664,8 +738,12 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
             final isPaused = biz.status == AppConstants.statusPaused;
 
             return Card(
-              color: const Color(0xFF1E293B),
+              color: AppColors.cardDark,
               margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.cardBorderDark),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: isMobile
@@ -675,22 +753,22 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(biz.shopName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(biz.shopName, style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
                               Chip(
                                 label: Text(biz.status, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                backgroundColor: isPaused ? Colors.amber.shade800 : Colors.green,
+                                backgroundColor: isPaused ? AppColors.haldiGold : AppColors.pannaEmerald,
                               ),
                             ],
                           ),
                           const SizedBox(height: 6),
-                          Text('ID: ${biz.shopId} | Owner: ${biz.ownerName}', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
-                          Text('City: ${biz.city} | Email: ${biz.email}', style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12)),
+                          Text('ID: ${biz.shopId} | Owner: ${biz.ownerName}', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
+                          Text('City: ${biz.city} | Email: ${biz.email}', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isPaused ? Colors.green : Colors.amber.shade900,
+                                backgroundColor: isPaused ? AppColors.pannaEmerald : AppColors.haldiGold,
                               ),
                               icon: Icon(isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white, size: 18),
                               label: Text(isPaused ? 'RESUME SHOP' : 'PAUSE SHOP', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -700,19 +778,19 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
                         ],
                       )
                     : ListTile(
-                        title: Text(biz.shopName, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                        subtitle: Text('Shop ID: ${biz.shopId} | Owner: ${biz.ownerName} | City: ${biz.city} | Email: ${biz.email}', style: GoogleFonts.inter(color: const Color(0xFF94A3B8))),
+                        title: Text(biz.shopName, style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+                        subtitle: Text('Shop ID: ${biz.shopId} | Owner: ${biz.ownerName} | City: ${biz.city} | Email: ${biz.email}', style: GoogleFonts.inter(color: AppColors.textMuted)),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Chip(
                               label: Text(biz.status, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                              backgroundColor: isPaused ? Colors.amber.shade800 : Colors.green,
+                              backgroundColor: isPaused ? AppColors.haldiGold : AppColors.pannaEmerald,
                             ),
                             const SizedBox(width: 12),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: isPaused ? Colors.green : Colors.amber.shade900,
+                                backgroundColor: isPaused ? AppColors.pannaEmerald : AppColors.haldiGold,
                               ),
                               icon: Icon(isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: Colors.white),
                               label: Text(isPaused ? 'RESUME SHOP' : 'PAUSE SHOP', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -749,15 +827,15 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.security_rounded, color: Color(0xFF818CF8), size: 64),
+          const Icon(Icons.security_rounded, color: AppColors.haldiGold, size: 64),
           const SizedBox(height: 16),
-          Text('Master Audit Trail & Security Logs', style: GoogleFonts.outfit(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+          Text('Master Audit Trail & Security Logs', style: GoogleFonts.outfit(fontSize: 20, color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Text(
               'All shop provisions, pause/resume actions, and administrative operations are securely recorded.',
-              style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 13),
+              style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ),
@@ -766,3 +844,4 @@ class _MasterControlPanelScreenState extends State<MasterControlPanelScreen> {
     );
   }
 }
+
