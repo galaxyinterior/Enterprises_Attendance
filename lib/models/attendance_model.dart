@@ -1,0 +1,67 @@
+class AttendanceModel {
+  final String attendanceId;
+  final String businessId;
+  final String employeeId;
+  final String employeeName;
+  final String date; // "YYYY-MM-DD"
+  final String shiftId;
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
+  final String status; // PRESENT, LATE, ABSENT, HALF_DAY, EARLY_CHECKOUT
+  final double confidence;
+  final String syncStatus; // PENDING, COMPLETED
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  AttendanceModel({
+    required this.attendanceId,
+    required this.businessId,
+    required this.employeeId,
+    required this.employeeName,
+    required this.date,
+    required this.shiftId,
+    this.checkInTime,
+    this.checkOutTime,
+    required this.status,
+    this.confidence = 1.0,
+    this.syncStatus = 'PENDING',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'attendanceId': attendanceId,
+      'businessId': businessId,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
+      'date': date,
+      'shiftId': shiftId,
+      'checkInTime': checkInTime?.toIso8601String(),
+      'checkOutTime': checkOutTime?.toIso8601String(),
+      'status': status,
+      'confidence': confidence,
+      'syncStatus': syncStatus,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
+  factory AttendanceModel.fromMap(Map<String, dynamic> map) {
+    return AttendanceModel(
+      attendanceId: map['attendanceId'] ?? '',
+      businessId: map['businessId'] ?? '',
+      employeeId: map['employeeId'] ?? '',
+      employeeName: map['employeeName'] ?? '',
+      date: map['date'] ?? '',
+      shiftId: map['shiftId'] ?? '',
+      checkInTime: map['checkInTime'] != null ? DateTime.parse(map['checkInTime']) : null,
+      checkOutTime: map['checkOutTime'] != null ? DateTime.parse(map['checkOutTime']) : null,
+      status: map['status'] ?? 'PRESENT',
+      confidence: (map['confidence'] ?? 1.0).toDouble(),
+      syncStatus: map['syncStatus'] ?? 'PENDING',
+      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : DateTime.now(),
+    );
+  }
+}
