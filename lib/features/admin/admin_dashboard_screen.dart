@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/employee_model.dart';
 import '../auth/login_screen.dart';
+import 'add_employee_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final String shopId;
@@ -174,10 +175,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               Text('Employee Directory', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
                 icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
-                label: const Text('ADD NEW EMPLOYEE', style: TextStyle(color: Colors.white)),
-                onPressed: _showAddEmployeeDialog,
+                label: const Text('ADD NEW EMPLOYEE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AddEmployeeScreen(
+                        businessId: widget.businessId,
+                        shopId: widget.shopId,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -223,70 +237,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 );
               },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddEmployeeDialog() {
-    final nameCtrl = TextEditingController();
-    final codeCtrl = TextEditingController(text: 'EMP-${const Uuid().v4().substring(0, 4).toUpperCase()}');
-    final phoneCtrl = TextEditingController();
-    final deptCtrl = TextEditingController(text: 'Sales');
-    final salaryCtrl = TextEditingController(text: '18000');
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: Text('Add New Employee', style: GoogleFonts.outfit(color: Colors.white)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Full Name', labelStyle: TextStyle(color: Color(0xFF94A3B8)))),
-              TextField(controller: codeCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Employee Code', labelStyle: TextStyle(color: Color(0xFF94A3B8)))),
-              TextField(controller: phoneCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Phone Number', labelStyle: TextStyle(color: Color(0xFF94A3B8)))),
-              TextField(controller: deptCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Department', labelStyle: TextStyle(color: Color(0xFF94A3B8)))),
-              TextField(controller: salaryCtrl, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Monthly Salary (₹)', labelStyle: TextStyle(color: Color(0xFF94A3B8)))),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
-            onPressed: () async {
-              final empId = const Uuid().v4();
-              final emp = EmployeeModel(
-                employeeId: empId,
-                businessId: widget.businessId,
-                employeeCode: codeCtrl.text,
-                fullName: nameCtrl.text,
-                phone: phoneCtrl.text,
-                department: deptCtrl.text,
-                designation: 'Staff',
-                assignedShiftId: 'SHIFT_MORNING',
-                joiningDate: DateTime.now(),
-                monthlySalary: double.tryParse(salaryCtrl.text) ?? 18000.0,
-                faceEnrollmentStatus: true,
-                // Sample 128D normalized dummy embedding vector for demonstration testing
-                faceEmbedding: List.generate(128, (i) => (i % 2 == 0 ? 0.05 : -0.05)),
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              );
-
-              await FirebaseFirestore.instance
-                  .collection(AppConstants.colBusinesses)
-                  .doc(widget.businessId)
-                  .collection(AppConstants.colEmployees)
-                  .doc(empId)
-                  .set(emp.toMap());
-
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text('SAVE & ENROLL', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
@@ -32,13 +33,44 @@ class FaceRecognitionService {
       _tfliteInterpreter = await Interpreter.fromAsset('assets/mobile_facenet.tflite');
       _isInitialized = true;
     } catch (e) {
-      print('Error initializing MobileFaceNet TFLite interpreter: $e');
+      debugPrint('Error initializing MobileFaceNet TFLite interpreter: $e');
     }
   }
 
   // Detect faces in an InputImage
   Future<List<Face>> detectFaces(InputImage inputImage) async {
     return await _faceDetector.processImage(inputImage);
+  }
+
+  /// Process raw image bytes & path, detect face, crop face ROI, and extract 128D embedding
+  Future<List<double>?> processFaceFromBytes(Uint8List bytes, String tempFilePath) async {
+    await initialize();
+    try {
+      final inputImage = InputImage.fromFilePath(tempFilePath);
+      final faces = await detectFaces(inputImage);
+
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+
+      if (faces.isNotEmpty) {
+        final face = faces.first;
+        final boundingBox = face.boundingBox;
+
+        int x = boundingBox.left.toInt().clamp(0, decoded.width - 1);
+        int y = boundingBox.top.toInt().clamp(0, decoded.height - 1);
+        int w = boundingBox.width.toInt().clamp(1, decoded.width - x);
+        int h = boundingBox.height.toInt().clamp(1, decoded.height - y);
+
+        final croppedFace = img.copyCrop(decoded, x: x, y: y, width: w, height: h);
+        return extractEmbedding(croppedFace);
+      } else {
+        // Fallback if ML Kit face box is out of bounds
+        return extractEmbedding(decoded);
+      }
+    } catch (e) {
+      debugPrint('Error processing face embedding: $e');
+      return null;
+    }
   }
 
   // Generate 128D Face Feature Vector Embedding from a cropped face image

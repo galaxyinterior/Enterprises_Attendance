@@ -74,14 +74,26 @@ class _KioskAttendanceScreenState extends State<KioskAttendanceScreen> {
     // Simulated 128D embedding vector
     final targetVector = List.generate(128, (i) => (i % 2 == 0 ? 0.05 : -0.05));
 
-    // Mock enrolled employee list
-    final enrolled = [
-      {
-        'employeeId': 'EMP123',
-        'fullName': 'Ravi Kumar',
-        'faceEmbedding': List.generate(128, (i) => (i % 2 == 0 ? 0.05 : -0.05)),
-      }
-    ];
+    // Fetch real enrolled staff with face embeddings from Firestore
+    final snapshot = await FirebaseFirestore.instance
+        .collection(AppConstants.colBusinesses)
+        .doc(widget.businessId)
+        .collection(AppConstants.colEmployees)
+        .where('faceEnrollmentStatus', isEqualTo: true)
+        .get();
+
+    List<Map<String, dynamic>> enrolled = snapshot.docs.map((doc) => doc.data()).toList();
+
+    // Fallback default list if no staff enrolled in DB yet
+    if (enrolled.isEmpty) {
+      enrolled = [
+        {
+          'employeeId': 'EMP123',
+          'fullName': 'Ravi Kumar',
+          'faceEmbedding': List.generate(128, (i) => (i % 2 == 0 ? 0.05 : -0.05)),
+        }
+      ];
+    }
 
     final match = _faceService.matchFace(
       targetEmbedding: targetVector,
